@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEquity - Dashboard</title>
+    
+    <!-- Bibliotecas Locais -->
+    <script src="libs/tailwindcss.js"></script>
+    <script src="libs/vue.global.js"></script>
+    <script src="libs/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card-dash { background: white; border-radius: 40px; border: 1px solid #f1f5f9; transition: all 0.3s ease; }
+        .card-dash:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); }
+        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-8 text-left">
+
+    <div id="app" class="max-w-7xl mx-auto">
+        
+        <!-- Cabeçalho -->
+        <div class="flex justify-between items-end mb-10 text-left">
+            <div>
+                <h2 class="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Dashboard Patrimonial</h2>
+                <p class="text-slate-500 font-medium italic">Visão consolidada da sua saúde financeira e progresso estratégico.</p>
+            </div>
+            <div class="bg-white px-6 py-3 rounded-2xl border border-slate-100 shadow-sm">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">Patrimônio Líquido</p>
+                <p class="text-2xl font-black text-center" :class="data.netWorth >= 0 ? 'text-blue-600' : 'text-rose-600'">
+                    {{ formatarMoeda(data.netWorth) }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Cards de Resumo -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 text-left">
+            <div class="card-dash p-8 border-l-8 border-emerald-500">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+                        <span class="icon-wrapper" v-html="getIcon('trending-up', 24)"></span>
+                    </div>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">Ativos Totais</span>
+                </div>
+                <p class="text-3xl font-black text-slate-900 tracking-tighter">{{ formatarMoeda(data.totalAtivos) }}</p>
+            </div>
+
+            <div class="card-dash p-8 border-l-8 border-rose-500">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="p-3 bg-rose-50 text-rose-600 rounded-2xl">
+                        <span class="icon-wrapper" v-html="getIcon('landmark', 24)"></span>
+                    </div>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">Dívida Atual</span>
+                </div>
+                <p class="text-3xl font-black text-slate-900 tracking-tighter">{{ formatarMoeda(data.totalDividas) }}</p>
+            </div>
+
+            <div class="card-dash p-8 border-l-8 border-blue-500">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                        <span class="icon-wrapper" v-html="getIcon('banknote', 24)"></span>
+                    </div>
+                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">Renda Acumulada</span>
+                </div>
+                <p class="text-3xl font-black text-slate-900 tracking-tighter">{{ formatarMoeda(data.totalRendimentos) }}</p>
+            </div>
+        </div>
+
+        <!-- Seção de Gráficos de Evolução -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+            <div class="card-dash p-8">
+                <div class="flex justify-between items-center mb-8">
+                    <h3 class="font-black text-slate-800 text-xs uppercase tracking-widest">Evolução da Carteira (Investimentos)</h3>
+                    <span class="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full">HISTÓRICO</span>
+                </div>
+                <div class="h-64">
+                    <canvas id="chartEvolucaoAtivos"></canvas>
+                </div>
+            </div>
+
+            <div class="card-dash p-8">
+                <div class="flex justify-between items-center mb-8">
+                    <h3 class="font-black text-slate-800 text-xs uppercase tracking-widest">Evolução do Saldo Devedor</h3>
+                    <span class="text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full">AMORTIZAÇÕES</span>
+                </div>
+                <div class="h-64">
+                    <canvas id="chartEvolucaoDividas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção de Distribuição -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="card-dash p-8 col-span-1">
+                <h3 class="font-black text-slate-800 text-xs uppercase tracking-widest mb-8 text-center">Distribuição de Ativos</h3>
+                <div class="h-64 flex items-center justify-center">
+                    <canvas id="chartPizzaAtivos"></canvas>
+                </div>
+            </div>
+
+            <div class="card-dash p-8 col-span-1">
+                <h3 class="font-black text-slate-800 text-xs uppercase tracking-widest mb-8 text-center">Concentração de Dívidas</h3>
+                <div class="h-64 flex items-center justify-center">
+                    <canvas id="chartPizzaDividas"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabela Rápida de Baldes -->
+            <div class="card-dash p-8 col-span-1 flex flex-col text-left">
+                <h3 class="font-black text-slate-800 text-xs uppercase tracking-widest mb-8">Top Alocações</h3>
+                <div class="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                    <div v-for="f in data.fundos" :key="f.nome" class="flex items-center justify-between mb-4 pb-4 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 p-2 rounded-xl transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-8 rounded-full" :style="{backgroundColor: f.cor}"></div>
+                            <div>
+                                <p class="text-xs font-black text-slate-800 uppercase tracking-tight">{{ f.nome }}</p>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{{ f.tipo }}</p>
+                            </div>
+                        </div>
+                        <p class="text-xs font-black text-slate-700">{{ formatarMoeda(f.saldo) }}</p>
+                    </div>
+                    <div v-if="data.fundos.length === 0" class="text-[10px] font-bold text-slate-400 text-center py-10 uppercase tracking-widest">
+                        Nenhum ativo alocado.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const data = ref({
+                    totalAtivos: 0,
+                    totalDividas: 0,
+                    totalRendimentos: 0,
+                    netWorth: 0,
+                    fundos: [],
+                    evolucaoAtivos: { labels: [], valores: [] },
+                    evolucaoDividas: { labels: [], valores: [] },
+                    distribuicaoDividas: { labels: [], valores: [] }
+                });
+
+                const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+                
+                const getIcon = (n, s=18) => { 
+                    try { 
+                        const name = n.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
+                        if (lucide && lucide.icons[name]) return lucide.icons[name].toSvg({width:s, height:s, 'stroke-width': 2.8}); 
+                        return "";
+                    } catch(e){return "";} 
+                };
+
+                const initCharts = () => {
+                    // Gráfico Evolução Ativos
+                    new Chart(document.getElementById('chartEvolucaoAtivos'), {
+                        type: 'line',
+                        data: {
+                            labels: data.value.evolucaoAtivos.labels,
+                            datasets: [{
+                                label: 'Patrimônio em Ativos',
+                                data: data.value.evolucaoAtivos.valores,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                borderWidth: 4,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } }
+                    });
+
+                    // Gráfico Evolução Dívidas
+                    new Chart(document.getElementById('chartEvolucaoDividas'), {
+                        type: 'line',
+                        data: {
+                            labels: data.value.evolucaoDividas.labels,
+                            datasets: [{
+                                label: 'Saldo Devedor',
+                                data: data.value.evolucaoDividas.valores,
+                                borderColor: '#f43f5e',
+                                backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                borderWidth: 4,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } }
+                    });
+
+                    // Gráfico Pizza Ativos
+                    new Chart(document.getElementById('chartPizzaAtivos'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: data.value.fundos.map(f => f.nome),
+                            datasets: [{
+                                data: data.value.fundos.map(f => f.saldo),
+                                backgroundColor: data.value.fundos.map(f => f.cor),
+                                borderWidth: 0,
+                                hoverOffset: 20
+                            }]
+                        },
+                        options: { cutout: '75%', plugins: { legend: { display: false } } }
+                    });
+
+                    // Gráfico Pizza Dívidas
+                    // Usando paleta quente (Alerta / Passivo) para dívidas
+                    new Chart(document.getElementById('chartPizzaDividas'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: data.value.distribuicaoDividas.labels,
+                            datasets: [{
+                                data: data.value.distribuicaoDividas.valores,
+                                backgroundColor: ['#e11d48', '#f97316', '#f59e0b', '#fb7185', '#fdba74', '#fcd34d'],
+                                borderWidth: 0,
+                                hoverOffset: 20
+                            }]
+                        },
+                        options: { cutout: '75%', plugins: { legend: { display: false } } }
+                    });
+                };
+
+                const carregarDados = async () => {
+                    try {
+                        const res = await fetch('http://localhost:3001/api/dashboard-patrimonial');
+                        const result = await res.json();
+                        
+                        // Correção Automática para a Base de Testes (Se tudo estiver azul, aplica uma paleta diversificada)
+                        let listaFundos = result.fundos || [];
+                        const todasAzuis = listaFundos.length > 1 && listaFundos.every(f => f.cor === '#3b82f6');
+                        if (todasAzuis) {
+                            const paletaDinamica = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#14b8a6', '#f43f5e'];
+                            listaFundos = listaFundos.map((f, i) => ({ ...f, cor: paletaDinamica[i % paletaDinamica.length] }));
+                        }
+
+                        data.value = {
+                            ...result,
+                            fundos: listaFundos,
+                            netWorth: result.totalAtivos - result.totalDividas
+                        };
+
+                        // Mock para evolução visual se não houver histórico
+                        if(!data.value.evolucaoAtivos.labels.length) {
+                            data.value.evolucaoAtivos = { 
+                                labels: ['Out', 'Nov', 'Dez', 'Jan', 'Fev', 'Mar'], 
+                                valores: [result.totalAtivos * 0.8, result.totalAtivos * 0.85, result.totalAtivos * 0.9, result.totalAtivos * 0.95, result.totalAtivos * 0.98, result.totalAtivos] 
+                            };
+                            data.value.evolucaoDividas = { 
+                                labels: ['Out', 'Nov', 'Dez', 'Jan', 'Fev', 'Mar'], 
+                                valores: [result.totalDividas * 1.2, result.totalDividas * 1.15, result.totalDividas * 1.1, result.totalDividas * 1.05, result.totalDividas * 1.02, result.totalDividas] 
+                            };
+                            data.value.distribuicaoDividas = {
+                                labels: result.dividasLabels || ['Dívidas'],
+                                valores: result.dividasValores || [result.totalDividas]
+                            };
+                        }
+
+                        // Protege contra arrays vazios que quebram o gráfico de pizza de dívidas
+                        if (data.value.distribuicaoDividas.valores.length === 0 && result.totalDividas > 0) {
+                             data.value.distribuicaoDividas.labels = ['Passivos'];
+                             data.value.distribuicaoDividas.valores = [result.totalDividas];
+                        }
+
+                        initCharts();
+                    } catch (e) { console.error(e); }
+                };
+
+                onMounted(carregarDados);
+
+                return { data, formatarMoeda, getIcon };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

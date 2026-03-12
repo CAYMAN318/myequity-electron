@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEquity - Gestão Patrimonial</title>
+    
+    <!-- Bibliotecas Locais -->
+    <script src="libs/tailwindcss.js"></script>
+    <script src="libs/vue.global.js"></script>
+    <script src="libs/lucide.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; overflow: hidden; }
+        .sidebar-item { transition: all 0.2s ease; border-radius: 12px; margin-bottom: 4px; }
+        .sidebar-item.active { background-color: #0f172a; color: #ffffff; }
+        .sidebar-item:not(.active):hover { background-color: #f8fafc; color: #1e293b; }
+        
+        iframe { width: 100%; height: 100%; border: none; }
+        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body class="h-screen flex">
+
+    <div id="app" class="flex w-full h-full">
+        
+        <!-- Menu Lateral (Sidebar) -->
+        <aside class="w-72 bg-white border-r border-slate-200 flex flex-col p-6">
+            <div class="mb-10 px-2">
+                <h1 class="text-xl font-black text-slate-900 tracking-tighter italic">MyEquity <span class="text-blue-600">.</span></h1>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Terminal Estratégico</p>
+            </div>
+
+            <nav class="mb-8">
+                <button @click="navegar('dashboard')" :class="{active: currentPath === 'dashboard'}" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-500">
+                    <span class="icon-wrapper" v-html="getIcon('layout-dashboard', 18)"></span> Dashboard
+                </button>
+
+                <button @click="navegar('investimentos')" :class="{active: currentPath === 'investimentos'}" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-500">
+                    <span class="icon-wrapper" v-html="getIcon('trending-up', 18)"></span> Gestão de Ativos
+                </button>
+
+                <button @click="navegar('dividas')" :class="{active: currentPath === 'dividas'}" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-500">
+                    <span class="icon-wrapper" v-html="getIcon('landmark', 18)"></span> Passivos & Dívidas
+                </button>
+            </nav>
+
+            <!-- Rodapé da Sidebar: Parâmetros (Antiga Configurações) -->
+            <div class="pt-6 border-t border-slate-100">
+                <button @click="navegar('parametros')" :class="{active: currentPath === 'parametros'}" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-500">
+                    <span class="icon-wrapper" v-html="getIcon('settings-2', 18)"></span> Parâmetros
+                </button>
+            </div>
+        </aside>
+
+        <!-- Área de Conteúdo (Iframe) -->
+        <main class="flex-1 relative bg-slate-50">
+            <iframe :src="iframeSrc" id="contentFrame"></iframe>
+        </main>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentPath = ref('dashboard');
+                const iframeSrc = ref('dashboard.html');
+
+                const getIcon = (name, size = 18) => {
+                    try {
+                        const iconName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                        if (lucide && lucide.icons[iconName]) {
+                            return lucide.icons[iconName].toSvg({ 
+                                'stroke-width': 2.8,
+                                width: size, 
+                                height: size 
+                            });
+                        }
+                        return "";
+                    } catch(e) { return ""; }
+                };
+
+                const navegar = (pagina) => {
+                    currentPath.value = pagina;
+                    iframeSrc.value = `${pagina}.html`;
+                };
+
+                onMounted(() => {
+                    setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150);
+                });
+
+                return {
+                    currentPath,
+                    iframeSrc,
+                    navegar,
+                    getIcon
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

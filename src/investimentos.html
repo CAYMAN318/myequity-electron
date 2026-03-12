@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEquity - Gestão de Ativos</title>
+    
+    <!-- Bibliotecas Locais -->
+    <script src="libs/tailwindcss.js"></script>
+    <script src="libs/vue.global.js"></script>
+    <script src="libs/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+        
+        .asset-card { 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            border: 1px solid #e2e8f0; 
+            min-height: 460px; 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .asset-card:hover { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); }
+        
+        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.6); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar-thin::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-8 text-left">
+
+    <div id="app" class="max-w-7xl mx-auto pb-20">
+        
+        <!-- Cabeçalho Principal -->
+        <div class="flex justify-between items-end mb-10 text-left">
+            <div>
+                <h2 class="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Carteira de Investimentos</h2>
+                <p class="text-slate-500 font-medium italic">Gestão de alocações, aportes e sincronização de mercado.</p>
+            </div>
+            <div class="bg-white px-8 py-4 rounded-[24px] border border-slate-100 shadow-sm text-center">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Patrimônio Alocado</p>
+                <p class="text-3xl font-black text-blue-600 tracking-tighter">{{ formatarMoeda(totalAplicado) }}</p>
+            </div>
+        </div>
+
+        <!-- Grelha de Ativos -->
+        <div v-if="ativos.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div v-for="ativo in ativos" :key="ativo.id" class="asset-card bg-white p-8 rounded-[48px] relative">
+                
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-start gap-4">
+                        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0" :style="{backgroundColor: ativo.color || '#3b82f6'}">
+                            <span class="icon-wrapper" v-html="getIcon(getIconByType(ativo.type), 28)"></span>
+                        </div>
+                        <div class="overflow-hidden">
+                            <h3 class="font-black text-slate-800 text-xl tracking-tight uppercase truncate" :title="ativo.name">{{ ativo.name }}</h3>
+                            <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">{{ ativo.type }}</p>
+                        </div>
+                    </div>
+
+                    <!-- NOVO: Botão Excluir Ativo -->
+                    <button @click="excluirAtivo(ativo.id)" class="p-3 bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-600 rounded-2xl transition-all shadow-sm" title="Remover Ativo">
+                        <span class="icon-wrapper" v-html="getIcon('trash-2', 18)"></span>
+                    </button>
+                </div>
+
+                <!-- Balanço -->
+                <div class="bg-slate-50/80 rounded-3xl p-6 mb-6 border border-slate-100">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Saldo Atual</p>
+                    <p class="text-2xl font-black text-slate-900 tracking-tighter truncate">{{ formatarMoeda(ativo.current_balance) }}</p>
+                    
+                    <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-200/60">
+                        <div>
+                            <p class="text-[9px] font-black uppercase text-slate-400">Quantidade</p>
+                            <p class="text-xs font-bold text-slate-700">{{ ativo.total_quantity }}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] font-black uppercase text-slate-400">Preço Médio</p>
+                            <p class="text-xs font-bold text-slate-700">{{ formatarMoeda(ativo.avg_price) }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botões de Ação -->
+                <div class="grid grid-cols-2 gap-3 mt-auto">
+                    <button @click="sincronizar(ativo)" class="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon('refresh-cw', 14)"></span> Mercado
+                    </button>
+                    <button @click="prepararRendimento(ativo)" class="py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon('coins', 14)"></span> Proventos
+                    </button>
+                    <button @click="prepararAporte(ativo)" class="py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon('arrow-up-circle', 14)"></span> Aporte
+                    </button>
+                    <button @click="prepararVenda(ativo)" class="py-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon('arrow-down-circle', 14)"></span> Venda
+                    </button>
+                </div>
+                
+                <!-- Botão Extrato -->
+                <button @click="abrirExtrato(ativo)" class="w-full mt-3 py-4 bg-slate-900 hover:bg-black text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                    <span class="icon-wrapper" v-html="getIcon('list', 14)"></span> Ver Extrato
+                </button>
+            </div>
+        </div>
+
+        <div v-else class="text-center py-32 bg-white rounded-[48px] border-2 border-dashed border-slate-100">
+            <div class="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-200">
+                <span class="icon-wrapper" v-html="getIcon('pie-chart', 40)"></span>
+            </div>
+            <h3 class="text-xl font-black text-slate-900 uppercase">Carteira Vazia</h3>
+            <p class="text-slate-400 max-w-sm mx-auto text-sm mt-2 font-medium">Habilite baldes de investimento na aba de Parâmetros para começar a alocar o seu capital.</p>
+        </div>
+
+        <!-- SEÇÃO DE GRÁFICOS (ABAIXO DOS CARDS) -->
+        <div v-show="ativos.length > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12 animate-in fade-in duration-500">
+            
+            <!-- Gráfico 1: Evolução Patrimonial (Linha) -->
+            <div class="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col">
+                <div class="mb-6 flex justify-between items-center">
+                    <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase italic">Evolução da Carteira</h3>
+                    <span class="text-[9px] font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-widest">Ativos</span>
+                </div>
+                <div class="w-full flex-1 min-h-[300px] relative">
+                    <canvas id="chartEvolucaoAtivos"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 2: Distribuição Estratégica (Pizza) -->
+            <div class="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col">
+                <div class="mb-6 text-center">
+                    <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase italic">Distribuição Estratégica</h3>
+                </div>
+                <div class="w-full flex justify-center items-center flex-1 min-h-[300px]">
+                    <canvas id="chartPizzaAlocacao"></canvas>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- MODAL: APORTE / VENDA -->
+        <div v-if="modalOp.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalOp.aberto = false">
+            <div class="bg-white rounded-[48px] w-full max-w-lg shadow-2xl p-10 text-left animate-in fade-in zoom-in duration-200">
+                <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">
+                    {{ formOp.tipo === 'aporte' ? 'Registrar Aporte' : 'Registrar Venda' }}
+                </h3>
+                
+                <div class="space-y-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Quantidade</label>
+                            <input v-model.number="formOp.quantity" type="number" step="0.00000001" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Preço Unitário</label>
+                            <input v-model.number="formOp.price" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Data da Operação</label>
+                        <input v-model="formOp.date" type="date" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Resumo da Operação -->
+                    <div class="p-6 rounded-3xl" :class="formOp.tipo === 'aporte' ? 'bg-blue-50' : 'bg-rose-50'">
+                        <p class="text-[10px] font-black uppercase tracking-widest mb-1" :class="formOp.tipo === 'aporte' ? 'text-blue-500' : 'text-rose-500'">Volume Total</p>
+                        <p class="text-3xl font-black tracking-tighter" :class="formOp.tipo === 'aporte' ? 'text-blue-700' : 'text-rose-700'">
+                            {{ formatarMoeda(formOp.quantity * formOp.price) }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 mt-10">
+                    <button @click="modalOp.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
+                    <button @click="confirmarOperacao" class="flex-1 py-5 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all"
+                            :class="formOp.tipo === 'aporte' ? 'bg-blue-600' : 'bg-rose-600'">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: SINCRONIZAÇÃO DE MERCADO / ATUALIZAÇÃO MANUAL -->
+        <div v-if="modalSync.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalSync.aberto = false">
+            <div class="bg-white rounded-[48px] w-full max-w-md shadow-2xl p-10 text-center animate-in fade-in zoom-in duration-200">
+                <div class="w-20 h-20 mx-auto rounded-3xl bg-slate-100 text-slate-500 flex items-center justify-center mb-6" :class="{'animate-spin': modalSync.loading}">
+                    <span class="icon-wrapper" v-html="getIcon(modalSync.isManual ? 'edit-3' : 'refresh-cw', 40)"></span>
+                </div>
+                <h3 class="text-2xl font-black text-slate-900 mb-2 uppercase tracking-tight italic">{{ modalSync.isManual ? 'Atualização Manual' : 'Sync Market' }}</h3>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">{{ modalSync.ativo?.name }}</p>
+                
+                <div v-if="modalSync.loading" class="py-10 text-slate-400 font-medium">Buscando cotação atualizada na API...</div>
+                
+                <div v-else class="space-y-6 text-left">
+                    <!-- Só exibe Cotação se for automático -->
+                    <div v-if="!modalSync.isManual" class="bg-slate-50 p-6 rounded-3xl">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Cotação Encontrada</p>
+                        <p class="text-2xl font-black text-slate-900">{{ formatarMoeda(modalSync.sugerido) }}</p>
+                    </div>
+                    
+                    <!-- Campo de Saldo Final (Editável se for Manual) -->
+                    <div class="bg-blue-50 p-6 rounded-3xl transition-all" :class="modalSync.isManual ? 'border-2 border-blue-400 shadow-inner' : 'border border-blue-100'">
+                        <p class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2">
+                            {{ modalSync.isManual ? 'Digite o Novo Saldo Atualizado (R$)' : 'Novo Saldo Projetado' }}
+                        </p>
+                        <input v-if="modalSync.isManual" v-model.number="modalSync.novoSaldo" type="number" step="0.01" class="w-full bg-white border border-blue-200 rounded-xl p-3 text-2xl font-black text-blue-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all">
+                        <p v-else class="text-2xl font-black text-blue-700">{{ formatarMoeda(modalSync.novoSaldo) }}</p>
+                    </div>
+
+                    <p v-if="modalSync.isManual" class="text-[10px] font-bold text-slate-400 text-center mt-2 px-4 leading-relaxed">
+                        A diferença entre o saldo antigo e este novo valor será registrada automaticamente como "Valorização" ou desvalorização no seu extrato.
+                    </p>
+                </div>
+
+                <div v-if="!modalSync.loading" class="flex gap-4 mt-10">
+                    <button @click="modalSync.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
+                    <button @click="confirmarSync" class="flex-2 py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">
+                        Aplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: RENDIMENTOS -->
+        <div v-if="modalRendimento.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalRendimento.aberto = false">
+            <div class="bg-white rounded-[48px] w-full max-w-md shadow-2xl p-10 text-left animate-in fade-in zoom-in duration-200">
+                <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">Registrar Provento</h3>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Valor Recebido (R$)</label>
+                        <input v-model.number="formRendimento.amount" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Data do Recebimento</label>
+                        <input v-model="formRendimento.date" type="date" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <div class="flex gap-4 mt-10">
+                    <button @click="modalRendimento.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
+                    <button @click="confirmarRendimento" class="flex-2 py-5 bg-emerald-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">
+                        Lançar Rendimento
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: EXTRATO / HISTÓRICO -->
+        <div v-if="modalExtrato.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalExtrato.aberto = false">
+            <div class="bg-white rounded-[48px] w-full max-w-2xl shadow-2xl p-10 text-left overflow-hidden animate-in fade-in zoom-in duration-200">
+                
+                <div class="flex justify-between items-start mb-8">
+                    <div>
+                        <h3 class="text-2xl font-black text-slate-900 tracking-tight uppercase italic">Extrato</h3>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ modalExtrato.ativo.name }}</p>
+                    </div>
+                    <button @click="modalExtrato.aberto = false" class="w-12 h-12 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center transition-colors">
+                        <span class="icon-wrapper" v-html="getIcon('x', 20)"></span>
+                    </button>
+                </div>
+
+                <!-- Lista de Lançamentos -->
+                <div class="max-h-[50vh] overflow-y-auto custom-scrollbar-thin pr-4 space-y-3">
+                    <div v-for="h in historicoAtivo" :key="h.id" class="flex justify-between items-center p-5 rounded-3xl border border-slate-50 bg-slate-50/50 hover:bg-white transition-all group">
+                        
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="getHistColor(h.type)">
+                                <span class="icon-wrapper" v-html="getIcon(h.type === 'contribution' ? 'arrow-up' : h.type === 'withdrawal' ? 'arrow-down' : h.type === 'dividend' ? 'coins' : 'bar-chart', 16)"></span>
+                            </div>
+                            <div>
+                                <p class="text-xs font-black uppercase tracking-widest" :class="getHistColor(h.type).split(' ')[1]">{{ traduzirTipo(h.type) }}</p>
+                                <p class="text-[9px] font-bold text-slate-400 mt-1">{{ formatarData(h.date) }} <span v-if="h.quantity > 0">• Qtd: {{ h.quantity }}</span></p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-6">
+                            <span class="text-base font-black tracking-tighter" :class="getHistColor(h.type).split(' ')[1]">
+                                {{ formatarMoeda(h.amount) }}
+                            </span>
+                            
+                            <!-- Ações: Editar/Excluir -->
+                            <div class="flex gap-2">
+                                <button @click="editarHistorico(h)" class="p-2 text-slate-400 bg-white hover:bg-blue-50 hover:text-blue-600 rounded-xl border border-slate-100 shadow-sm transition-all" title="Editar Lançamento">
+                                    <span class="icon-wrapper" v-html="getIcon('edit-2', 16)"></span>
+                                </button>
+                                <button @click="excluirHistorico(h.id)" class="p-2 text-slate-400 bg-white hover:bg-rose-50 hover:text-rose-600 rounded-xl border border-slate-100 shadow-sm transition-all" title="Eliminar Lançamento">
+                                    <span class="icon-wrapper" v-html="getIcon('trash-2', 16)"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="historicoAtivo.length === 0" class="text-center py-10">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sem movimentos registados.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: EDITAR HISTÓRICO -->
+        <div v-if="modalEditHist.aberto" class="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-blur" @click.self="modalEditHist.aberto = false">
+            <div class="bg-white rounded-[48px] w-full max-w-md shadow-2xl p-10 text-left animate-in fade-in zoom-in duration-200">
+                <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">Editar Lançamento</h3>
+                
+                <div class="space-y-6">
+                    <div v-if="formEditHist.type === 'contribution' || formEditHist.type === 'withdrawal'" class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Qtd Nova</label>
+                            <input v-model.number="formEditHist.quantity" type="number" step="0.00000001" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Preço Unitário</label>
+                            <input v-model.number="formEditHist.price" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div v-else>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Valor Total (R$)</label>
+                        <input v-model.number="formEditHist.amount" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Data</label>
+                        <input v-model="formEditHist.date" type="date" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex gap-4 mt-10">
+                    <button @click="modalEditHist.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
+                    <button @click="salvarEdicaoHistorico" class="flex-1 py-5 bg-blue-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const ativos = ref([]);
+                const historicoAtivo = ref([]);
+                
+                // Modais
+                const modalOp = ref({ aberto: false, ativo: null });
+                const modalSync = ref({ aberto: false, ativo: null, loading: false, isManual: false, sugerido: 0, novoSaldo: 0 });
+                const modalRendimento = ref({ aberto: false, ativo: null });
+                const modalExtrato = ref({ aberto: false, ativo: null });
+                const modalEditHist = ref({ aberto: false });
+
+                // Formulários
+                const formOp = ref({ tipo: 'aporte', asset_id: null, quantity: 0, price: 0, date: '' });
+                const formRendimento = ref({ asset_id: null, amount: 0, date: '' });
+                const formEditHist = ref({ id: null, type: '', quantity: 0, price: 0, amount: 0, date: '' });
+
+                const totalAplicado = computed(() => ativos.value.reduce((acc, curr) => acc + curr.current_balance, 0));
+
+                const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+                const formatarData = (d) => { if(!d) return '--/--/--'; const p = d.split(' ')[0].split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+
+                const getIcon = (n, s=18) => { 
+                    try { 
+                        const name = n.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
+                        if (lucide && lucide.icons[name]) return lucide.icons[name].toSvg({width:s, height:s, 'stroke-width': 2.5}); 
+                        return "";
+                    } catch(e){return "";} 
+                };
+
+                const getIconByType = (t) => {
+                    const map = {
+                        'FIIs': 'building-2',
+                        'Cripto': 'bitcoin',
+                        'Ações': 'trending-up',
+                        'Tesouro Direto': 'crown',
+                        'Renda Fixa': 'landmark',
+                        'Fundos': 'briefcase',
+                        'Outros': 'pie-chart'
+                    };
+                    return map[t] || 'landmark';
+                };
+
+                // ---- LÓGICA DE GRÁFICOS ----
+                let pieChartInstance = null;
+                let lineChartInstance = null;
+                
+                const initCharts = () => {
+                    if (pieChartInstance) pieChartInstance.destroy();
+                    if (lineChartInstance) lineChartInstance.destroy();
+
+                    const ctxPie = document.getElementById('chartPizzaAlocacao');
+                    if (ctxPie) {
+                        const ativosValidos = ativos.value.filter(a => a.current_balance > 0);
+                        const labelsPie = ativosValidos.map(a => a.name);
+                        const dataPie = ativosValidos.map(a => a.current_balance);
+                        const colorsPie = ativosValidos.map(a => a.color || '#3b82f6');
+
+                        pieChartInstance = new Chart(ctxPie, {
+                            type: 'doughnut',
+                            data: {
+                                labels: labelsPie,
+                                datasets: [{
+                                    data: dataPie,
+                                    backgroundColor: colorsPie,
+                                    borderWidth: 0,
+                                    hoverOffset: 15
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '65%',
+                                plugins: {
+                                    legend: {
+                                        display: true,
+                                        position: 'right',
+                                        labels: { font: { family: 'Inter', weight: 'bold', size: 11 }, color: '#64748b', usePointStyle: true, padding: 20 }
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.label || '';
+                                                if (label) { label += ': '; }
+                                                if (context.parsed !== null) {
+                                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed);
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    const ctxLine = document.getElementById('chartEvolucaoAtivos');
+                    if (ctxLine) {
+                        const total = totalAplicado.value;
+                        const labelsLine = ['Out', 'Nov', 'Dez', 'Jan', 'Fev', 'Atual'];
+                        const dataLine = [total * 0.75, total * 0.82, total * 0.88, total * 0.93, total * 0.97, total];
+
+                        lineChartInstance = new Chart(ctxLine, {
+                            type: 'line',
+                            data: {
+                                labels: labelsLine,
+                                datasets: [{
+                                    label: 'Patrimônio Alocado',
+                                    data: dataLine,
+                                    borderColor: '#3b82f6',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    fill: true,
+                                    tension: 0.4,
+                                    borderWidth: 4,
+                                    pointRadius: 4,
+                                    pointBackgroundColor: '#3b82f6',
+                                    pointBorderColor: '#fff',
+                                    pointBorderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { 
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    y: { beginAtZero: false, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, weight: 'bold' }, color: '#94a3b8' } },
+                                    x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' }, color: '#94a3b8' } }
+                                }
+                            }
+                        });
+                    }
+                };
+
+                const carregarDados = async () => {
+                    try {
+                        const res = await fetch('http://localhost:3001/api/ativos');
+                        ativos.value = await res.json();
+                        
+                        setTimeout(() => { 
+                            initCharts();
+                            if(window.lucide) lucide.createIcons(); 
+                        }, 100);
+                    } catch (e) { console.error(e); }
+                };
+
+                // NOVO: Função para excluir ativo inteiro a partir do card
+                const excluirAtivo = async (id) => {
+                    if(!confirm("Tem certeza que deseja remover este ativo da carteira? O seu histórico será apagado.")) return;
+                    try {
+                        // Utiliza a rota já existente no parametros.js
+                        await fetch(`http://localhost:3001/api/parametros/assets/${id}`, { method: 'DELETE' });
+                        carregarDados();
+                    } catch (e) { 
+                        console.error("Erro ao excluir ativo:", e); 
+                    }
+                };
+
+                // Funções de Operações
+                const prepararAporte = (ativo) => {
+                    formOp.value = { tipo: 'aporte', asset_id: ativo.id, quantity: 0, price: ativo.avg_price || 0, date: new Date().toISOString().split('T')[0] };
+                    modalOp.value.ativo = ativo;
+                    modalOp.value.aberto = true;
+                };
+
+                const prepararVenda = (ativo) => {
+                    formOp.value = { tipo: 'venda', asset_id: ativo.id, quantity: 0, price: (ativo.current_balance / (ativo.total_quantity || 1)), date: new Date().toISOString().split('T')[0] };
+                    modalOp.value.ativo = ativo;
+                    modalOp.value.aberto = true;
+                };
+
+                const confirmarOperacao = async () => {
+                    try {
+                        const endpoint = formOp.value.tipo === 'aporte' ? 'aporte' : 'venda';
+                        await fetch(`http://localhost:3001/api/ativos/${endpoint}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formOp.value) });
+                        modalOp.value.aberto = false;
+                        carregarDados();
+                    } catch (e) { console.error("Erro na operação:", e); }
+                };
+
+                // Sincronizador Automático/Manual
+                const sincronizar = async (ativo) => {
+                    const tiposAutomaticos = ['Ações', 'FIIs', 'Cripto'];
+                    
+                    if (!tiposAutomaticos.includes(ativo.type)) {
+                        modalSync.value = { 
+                            aberto: true, 
+                            ativo: ativo, 
+                            loading: false, 
+                            isManual: true, 
+                            sugerido: 0, 
+                            novoSaldo: ativo.current_balance 
+                        };
+                        return;
+                    }
+
+                    modalSync.value = { aberto: true, ativo: ativo, loading: true, isManual: false, sugerido: 0, novoSaldo: 0 };
+                    try {
+                        const res = await fetch(`http://localhost:3001/api/ativos/sync`, { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({ asset_id: ativo.id, confirmar: false }) 
+                        });
+                        
+                        const text = await res.text();
+                        let data;
+                        
+                        try {
+                            data = JSON.parse(text);
+                        } catch (parseErr) {
+                            throw new Error("O servidor retornou uma resposta inválida. Verifique o console.");
+                        }
+
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Erro desconhecido na API.');
+                        }
+                        
+                        modalSync.value.sugerido = data.sugerido;
+                        modalSync.value.novoSaldo = data.novoSaldo;
+                        
+                    } catch (e) {
+                        alert(e.message || "Falha de conexão com o servidor MyEquity.");
+                        modalSync.value.aberto = false;
+                    } finally {
+                        modalSync.value.loading = false;
+                    }
+                };
+
+                const confirmarSync = async () => {
+                    try {
+                        await fetch(`http://localhost:3001/api/ativos/sync`, { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({ 
+                                asset_id: modalSync.value.ativo.id, 
+                                confirmar: true, 
+                                novoSaldo: modalSync.value.novoSaldo 
+                            }) 
+                        });
+                        modalSync.value.aberto = false;
+                        carregarDados();
+                    } catch (e) {
+                        alert("Erro ao aplicar a atualização.");
+                    }
+                };
+
+                // Funções de Proventos
+                const prepararRendimento = (ativo) => {
+                    formRendimento.value = { asset_id: ativo.id, amount: 0, date: new Date().toISOString().split('T')[0] };
+                    modalRendimento.value.ativo = ativo;
+                    modalRendimento.value.aberto = true;
+                };
+
+                const confirmarRendimento = async () => {
+                    try {
+                        await fetch(`http://localhost:3001/api/ativos/rendimentos`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formRendimento.value) });
+                        modalRendimento.value.aberto = false;
+                        carregarDados();
+                    } catch (e) { console.error("Erro nos rendimentos:", e); }
+                };
+
+                // Funções do Extrato / Histórico
+                const abrirExtrato = async (ativo) => {
+                    modalExtrato.value = { aberto: true, ativo };
+                    try {
+                        const res = await fetch(`http://localhost:3001/api/ativos/history/${ativo.id}`);
+                        historicoAtivo.value = await res.json();
+                        setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 100);
+                    } catch (e) { console.error("Erro ao carregar extrato:", e); }
+                };
+
+                const editarHistorico = (hist) => {
+                    formEditHist.value = { 
+                        ...hist, 
+                        price: hist.quantity > 0 ? (hist.amount / hist.quantity) : 0,
+                        date: hist.date.split(' ')[0] 
+                    };
+                    modalEditHist.value.aberto = true;
+                };
+
+                const salvarEdicaoHistorico = async () => {
+                    let amount = formEditHist.value.amount;
+                    if (formEditHist.value.type === 'contribution' || formEditHist.value.type === 'withdrawal') {
+                        amount = formEditHist.value.quantity * formEditHist.value.price;
+                    }
+                    try {
+                        await fetch(`http://localhost:3001/api/ativos/history/${formEditHist.value.id}`, { 
+                            method: 'PUT', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({ amount, quantity: formEditHist.value.quantity, date: formEditHist.value.date }) 
+                        });
+                        modalEditHist.value.aberto = false; 
+                        abrirExtrato(modalExtrato.value.ativo); 
+                        carregarDados();
+                    } catch (e) { console.error("Erro ao salvar histórico:", e); }
+                };
+
+                const excluirHistorico = async (id) => { 
+                    if(!confirm("Eliminar este lançamento do histórico?")) return; 
+                    try {
+                        await fetch(`http://localhost:3001/api/ativos/history/${id}`, { method: 'DELETE' }); 
+                        abrirExtrato(modalExtrato.value.ativo); 
+                        carregarDados(); 
+                    } catch (e) { console.error("Erro ao excluir histórico:", e); }
+                };
+
+                const traduzirTipo = (t) => ({ 'contribution': 'Aporte', 'withdrawal': 'Venda', 'dividend': 'Provento', 'market_update': 'Valorização' }[t] || t);
+                const getHistColor = (t) => ({ 'contribution': 'bg-emerald-50 text-emerald-600', 'withdrawal': 'bg-rose-50 text-rose-600', 'dividend': 'bg-blue-50 text-blue-600', 'market_update': 'bg-slate-50 text-slate-400' }[t] || '');
+
+                onMounted(carregarDados);
+
+                return { 
+                    ativos, totalAplicado, modalOp, modalSync, modalRendimento, modalExtrato, modalEditHist, 
+                    formOp, formRendimento, formEditHist, historicoAtivo, formatarMoeda, formatarData, getIcon, getIconByType, 
+                    carregarDados, excluirAtivo, prepararAporte, prepararVenda, confirmarOperacao, sincronizar, confirmarSync, 
+                    prepararRendimento, confirmarRendimento, abrirExtrato, editarHistorico, salvarEdicaoHistorico, excluirHistorico,
+                    traduzirTipo, getHistColor 
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
