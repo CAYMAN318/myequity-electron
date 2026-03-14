@@ -1,14 +1,19 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const { app } = require('electron');
 
-const dbPath = path.join(__dirname, '..', 'bd_myequity.db');
+// Mágica do Electron: Usa AppData em produção e a pasta local no desenvolvimento
+const dbPath = app.isPackaged 
+    ? path.join(app.getPath('userData'), 'bd_myequity.db')
+    : path.join(__dirname, '..', 'bd_myequity.db');
+
 const db = new Database(dbPath);
 
 db.pragma('foreign_keys = ON');
 
 // --- ESTRUTURA COMPLETA E ATUALIZADA ---
 db.exec(`
-    -- CONFIGURAÇÕES GERAIS DO SISTEMA (Nova Tabela)
+    -- CONFIGURAÇÕES GERAIS DO SISTEMA
     CREATE TABLE IF NOT EXISTS Settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -64,6 +69,6 @@ db.exec(`
     );
 `);
 
-console.log(">>> [BANCO DE DADOS] Schema validado com sucesso.");
+console.log(">>> [BANCO DE DADOS] Conectado em:", dbPath);
 
 module.exports = db;

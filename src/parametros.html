@@ -125,7 +125,7 @@
                     </div>
                     <div>
                         <h3 class="text-2xl font-black uppercase tracking-tight italic">Gestão de Dados</h3>
-                        <p class="text-slate-400 text-xs font-medium italic">Arquivo de inteligência: bd_myequity.db</p>
+                        <p class="text-slate-400 text-xs font-medium italic">Arquivo de inteligência local seguro</p>
                     </div>
                 </div>
 
@@ -177,7 +177,6 @@
                     <div class="grid grid-cols-2 gap-4 text-left">
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Classe</label>
-                            <!-- Inserido 'Fundos' e 'Outros' que você solicitou -->
                             <select v-model="formAsset.type" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none">
                                 <option>Ações</option>
                                 <option>FIIs</option>
@@ -194,7 +193,7 @@
                         </div>
                     </div>
 
-                    <!-- Seletor de Cores de Gráfico (Necessário para a correção do Dashboard) -->
+                    <!-- Seletor de Cores de Gráfico -->
                     <div class="text-left">
                         <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Cor de Identificação (Dashboard)</label>
                         <div class="flex flex-wrap gap-3 bg-slate-50/50 border-2 border-slate-50 p-4 rounded-2xl">
@@ -235,7 +234,7 @@
             </div>
         </div>
 
-        <!-- MODAL NOVO CONTRATO (COM DATA DE INÍCIO MANTIDA) -->
+        <!-- MODAL NOVO CONTRATO -->
         <div v-if="modalLoan.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalLoan.aberto = false">
             <div class="bg-white rounded-[48px] w-full max-w-xl shadow-2xl p-10 overflow-y-auto max-h-[90vh] custom-scrollbar text-left">
                 <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">Novo Contrato</h3>
@@ -268,7 +267,6 @@
                         </div>
                     </div>
 
-                    <!-- MANTIDO: Data de Início e Consignado -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Início do Contrato</label>
@@ -365,7 +363,7 @@
                     } catch (e) { console.error(e); }
                 };
 
-                // Lógica de Sugestões: Mock para Tesouro/Fundos + API para B3/Cripto
+                // Lógica de Sugestões ATUALIZADA (Incluindo Criptos Locais)
                 const buscarSugestoes = async () => {
                     const query = formAsset.value.name;
                     if (query.length < 2) { sugestoes.value = []; return; }
@@ -373,17 +371,26 @@
                     let resultadosLocais = [];
                     const termoBusca = query.toLowerCase();
                     
-                    // Fallback local: Para Tesouro Direto, Fundos comuns e Renda Fixa
-                    if (termoBusca.includes('tesouro') || termoBusca.includes('selic') || termoBusca.includes('ipca') || termoBusca.includes('pre') || termoBusca.includes('fundo') || termoBusca.includes('cdb')) {
-                        const locaisMock = [
-                            { ticker: 'TD SELIC', name: 'Tesouro Selic', type: 'Tesouro Direto', price: 14000 },
-                            { ticker: 'TD IPCA+', name: 'Tesouro IPCA+', type: 'Tesouro Direto', price: 3000 },
-                            { ticker: 'TD PRE', name: 'Tesouro Prefixado', type: 'Tesouro Direto', price: 800 },
-                            { ticker: 'CDB DI', name: 'CDB Liquidez Diária', type: 'Renda Fixa', price: 1000 },
-                            { ticker: 'FUNDO DI', name: 'Fundo Referenciado DI', type: 'Fundos', price: 100 }
-                        ];
-                        resultadosLocais = locaisMock.filter(t => t.name.toLowerCase().includes(termoBusca) || t.ticker.toLowerCase().includes(termoBusca) || t.type.toLowerCase().includes(termoBusca));
-                    }
+                    // Base de Dados de Conhecimento Local
+                    const locaisMock = [
+                        // Criptomoedas
+                        { ticker: 'BTC', name: 'Bitcoin', type: 'Cripto', price: 0 },
+                        { ticker: 'ETH', name: 'Ethereum', type: 'Cripto', price: 0 },
+                        { ticker: 'USDT', name: 'Tether (Dólar)', type: 'Cripto', price: 0 },
+                        { ticker: 'SOL', name: 'Solana', type: 'Cripto', price: 0 },
+                        // Tesouro Direto e Renda Fixa
+                        { ticker: 'TD SELIC', name: 'Tesouro Selic', type: 'Tesouro Direto', price: 14000 },
+                        { ticker: 'TD IPCA+', name: 'Tesouro IPCA+', type: 'Tesouro Direto', price: 3000 },
+                        { ticker: 'TD PRE', name: 'Tesouro Prefixado', type: 'Tesouro Direto', price: 800 },
+                        { ticker: 'CDB DI', name: 'CDB Liquidez Diária', type: 'Renda Fixa', price: 1000 },
+                        { ticker: 'FUNDO DI', name: 'Fundo Referenciado DI', type: 'Fundos', price: 100 }
+                    ];
+
+                    resultadosLocais = locaisMock.filter(t => 
+                        t.name.toLowerCase().includes(termoBusca) || 
+                        t.ticker.toLowerCase().includes(termoBusca) || 
+                        t.type.toLowerCase().includes(termoBusca)
+                    );
 
                     try {
                         const r = await fetch(`http://localhost:3001/api/ativos/search-ticker?q=${query}`);

@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const os = require('os');
+const { app } = require('electron');
 
-const upload = multer({ dest: 'temp/' });
+// Usa a pasta temporária do próprio Sistema Operacional para evitar bloqueios de escrita
+const upload = multer({ dest: os.tmpdir() });
 
 /**
  * --- GESTÃO DE SETTINGS ---
@@ -20,8 +22,7 @@ router.get('/settings/:key', (req, res) => {
 router.post('/settings', (req, res) => {
     const { key, value } = req.body;
     try {
-        db.prepare("INSERT INTO Settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-          .run(key, value);
+        db.prepare("INSERT INTO Settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -76,43 +77,22 @@ router.get('/loans', (req, res) => {
 });
 
 router.post('/loans', (req, res) => {
-    const { 
-        description, total_principal, interest_rate, installments_total, 
-        installments_paid, monthly_payment, start_date, is_payroll_deductible 
-    } = req.body;
+    const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
     try {
         db.prepare(`
-            INSERT INTO Loans (
-                description, total_principal, interest_rate, installments_total, 
-                installments_paid, monthly_payment, start_date, is_payroll_deductible, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
-        `).run(
-            description, parseFloat(total_principal), parseFloat(interest_rate), 
-            parseInt(installments_total), parseInt(installments_paid) || 0, 
-            parseFloat(monthly_payment), start_date, is_payroll_deductible ? 1 : 0
-        );
+            INSERT INTO Loans (description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        `).run(description, parseFloat(total_principal), parseFloat(interest_rate), parseInt(installments_total), parseInt(installments_paid) || 0, parseFloat(monthly_payment), start_date, is_payroll_deductible ? 1 : 0);
         res.status(201).json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// NOVO: Rota para Editar (Atualizar) o Contrato de Dívida
 router.put('/loans/:id', (req, res) => {
-    const { 
-        description, total_principal, interest_rate, installments_total, 
-        installments_paid, monthly_payment, start_date, is_payroll_deductible 
-    } = req.body;
+    const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
     try {
         db.prepare(`
-            UPDATE Loans SET 
-                description = ?, total_principal = ?, interest_rate = ?, 
-                installments_total = ?, installments_paid = ?, monthly_payment = ?, 
-                start_date = ?, is_payroll_deductible = ?
-            WHERE id = ?
-        `).run(
-            description, parseFloat(total_principal), parseFloat(interest_rate), 
-            parseInt(installments_total), parseInt(installments_paid) || 0, 
-            parseFloat(monthly_payment), start_date, is_payroll_deductible ? 1 : 0, req.params.id
-        );
+            UPDATE Loans SET description = ?, total_principal = ?, interest_rate = ?, installments_total = ?, installments_paid = ?, monthly_payment = ?, start_date = ?, is_payroll_deductible = ? WHERE id = ?
+        `).run(description, parseFloat(total_principal), parseFloat(interest_rate), parseInt(installments_total), parseInt(installments_paid) || 0, parseFloat(monthly_payment), start_date, is_payroll_deductible ? 1 : 0, req.params.id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -128,7 +108,7 @@ router.delete('/loans/:id', (req, res) => {
  * --- SISTEMA: BACKUP & RESTORE ---
  */
 router.get('/system/backup', (req, res) => {
-    const dbPath = path.join(__dirname, '../../bd_myequity.db');
+    const dbPath = db.name; // Pega dinamicamente o caminho real que o SQLite está usando
     if (fs.existsSync(dbPath)) {
         res.download(dbPath, `myequity_backup_${new Date().toISOString().split('T')[0]}.db`);
     } else {
@@ -138,15 +118,26 @@ router.get('/system/backup', (req, res) => {
 
 router.post('/system/restore', upload.single('database'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+    
     const tempPath = req.file.path;
-    const dbPath = path.join(__dirname, '../../bd_myequity.db');
+    const dbPath = db.name; // Caminho real
+
     try {
+        // Obrigatório fechar a conexão no Windows antes de substituir o arquivo
+        db.close(); 
         fs.copyFileSync(tempPath, dbPath);
         fs.unlinkSync(tempPath);
-        res.json({ success: true, message: "Backup restaurado. Por favor, reinicie o aplicativo." });
+        
+        // Reinicia o aplicativo automaticamente para carregar o novo banco
+        setTimeout(() => {
+            app.relaunch();
+            app.exit(0);
+        }, 1000);
+
+        res.json({ success: true, message: "Backup restaurado com sucesso! Reiniciando..." });
     } catch (err) {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        res.status(500).json({ error: "Erro ao restaurar arquivo: " + err.message });
+        res.status(500).json({ error: "Erro ao restaurar: " + err.message });
     }
 });
 
