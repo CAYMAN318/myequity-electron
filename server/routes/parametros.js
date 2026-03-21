@@ -9,9 +9,9 @@ const { app } = require('electron');
 // Usa a pasta temporária do próprio Sistema Operacional para evitar bloqueios de escrita
 const upload = multer({ dest: os.tmpdir() });
 
-/**
- * --- GESTÃO DE SETTINGS ---
- */
+// ============================================================================
+// 1. GESTÃO DE SISTEMA E INTEGRAÇÕES (SETTINGS)
+// ============================================================================
 router.get('/settings/:key', (req, res) => {
     try {
         const row = db.prepare("SELECT value FROM Settings WHERE key = ?").get(req.params.key);
@@ -27,92 +27,116 @@ router.post('/settings', (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/**
- * --- CARTEIRA DE ATIVOS (SETUP) ---
- */
-router.get('/assets', (req, res) => {
+// ============================================================================
+// 2. MACRO-CLASSES (ALOCAÇÃO ALVO)
+// ============================================================================
+router.get('/classes', (req, res) => {
+    try { 
+        res.json(db.prepare("SELECT * FROM Classes ORDER BY name").all()); 
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/classes', (req, res) => {
+    const { name, target_percentage, color } = req.body;
     try {
-        const rows = db.prepare("SELECT * FROM Assets ORDER BY status, name").all();
+        db.prepare("INSERT INTO Classes (name, target_percentage, color) VALUES (?, ?, ?)").run(name, target_percentage, color || '#3b82f6');
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/classes/:id', (req, res) => {
+    const { name, target_percentage, color } = req.body;
+    try {
+        db.prepare("UPDATE Classes SET name = ?, target_percentage = ?, color = ? WHERE id = ?").run(name, target_percentage, color, req.params.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/classes/:id', (req, res) => {
+    try {
+        db.prepare("DELETE FROM Classes WHERE id = ?").run(req.params.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================================
+// 3. SETORES E SUBCATEGORIAS
+// ============================================================================
+router.get('/subcategories', (req, res) => {
+    try {
+        const rows = db.prepare(`
+            SELECT s.*, c.name as class_name 
+            FROM Subcategories s 
+            LEFT JOIN Classes c ON s.class_id = c.id 
+            ORDER BY c.name, s.name
+        `).all();
         res.json(rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/assets-setup', (req, res) => {
-    const { name, type, target_goal, color, initial_qty, initial_price, date } = req.body;
-    const initial_amount = (parseFloat(initial_qty) || 0) * (parseFloat(initial_price) || 0);
-
+router.post('/subcategories', (req, res) => {
+    const { class_id, name } = req.body;
     try {
-        db.transaction(() => {
-            const info = db.prepare(`
-                INSERT INTO Assets (name, type, current_balance, target_goal, color, status, last_sync)
-                VALUES (?, ?, ?, ?, ?, 'active', ?)
-            `).run(name.toUpperCase(), type, initial_amount, target_goal || 0, color || '#3b82f6', date);
-
-            if (initial_amount > 0) {
-                db.prepare(`
-                    INSERT INTO EquityHistory (asset_id, type, amount, quantity, date)
-                    VALUES (?, 'contribution', ?, ?, ?)
-                `).run(info.lastInsertRowid, initial_amount, initial_qty, date);
-            }
-        })();
-        res.status(201).json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.delete('/assets/:id', (req, res) => {
-    try {
-        db.prepare("DELETE FROM Assets WHERE id = ?").run(req.params.id);
+        db.prepare("INSERT INTO Subcategories (class_id, name) VALUES (?, ?)").run(class_id, name);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/**
- * --- CONTRATOS DE DÍVIDA (LOANS) ---
- */
-router.get('/loans', (req, res) => {
+router.put('/subcategories/:id', (req, res) => {
+    const { class_id, name } = req.body;
     try {
-        const rows = db.prepare("SELECT * FROM Loans ORDER BY status, description").all();
-        res.json(rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.post('/loans', (req, res) => {
-    const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
-    try {
-        db.prepare(`
-            INSERT INTO Loans (description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
-        `).run(description, parseFloat(total_principal), parseFloat(interest_rate), parseInt(installments_total), parseInt(installments_paid) || 0, parseFloat(monthly_payment), start_date, is_payroll_deductible ? 1 : 0);
-        res.status(201).json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.put('/loans/:id', (req, res) => {
-    const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
-    try {
-        db.prepare(`
-            UPDATE Loans SET description = ?, total_principal = ?, interest_rate = ?, installments_total = ?, installments_paid = ?, monthly_payment = ?, start_date = ?, is_payroll_deductible = ? WHERE id = ?
-        `).run(description, parseFloat(total_principal), parseFloat(interest_rate), parseInt(installments_total), parseInt(installments_paid) || 0, parseFloat(monthly_payment), start_date, is_payroll_deductible ? 1 : 0, req.params.id);
+        db.prepare("UPDATE Subcategories SET class_id = ?, name = ? WHERE id = ?").run(class_id, name, req.params.id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.delete('/loans/:id', (req, res) => {
+router.delete('/subcategories/:id', (req, res) => {
     try {
-        db.prepare("DELETE FROM Loans WHERE id = ?").run(req.params.id);
+        db.prepare("DELETE FROM Subcategories WHERE id = ?").run(req.params.id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/**
- * --- SISTEMA: BACKUP & RESTORE ---
- */
+// ============================================================================
+// 4. METAS (BUCKETING / GOALS)
+// ============================================================================
+router.get('/goals', (req, res) => {
+    try { res.json(db.prepare("SELECT * FROM Goals ORDER BY deadline, name").all()); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/goals', (req, res) => {
+    const { name, target_value, deadline } = req.body;
+    try {
+        db.prepare("INSERT INTO Goals (name, target_value, deadline) VALUES (?, ?, ?)").run(name, target_value, deadline || null);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/goals/:id', (req, res) => {
+    const { name, target_value, deadline } = req.body;
+    try {
+        db.prepare("UPDATE Goals SET name = ?, target_value = ?, deadline = ? WHERE id = ?").run(name, target_value, deadline || null, req.params.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/goals/:id', (req, res) => {
+    try {
+        db.prepare("DELETE FROM Goals WHERE id = ?").run(req.params.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================================
+// 5. BACKUP E RESTORE DO BANCO DE DADOS
+// ============================================================================
 router.get('/system/backup', (req, res) => {
     const dbPath = db.name; // Pega dinamicamente o caminho real que o SQLite está usando
     if (fs.existsSync(dbPath)) {
         res.download(dbPath, `myequity_backup_${new Date().toISOString().split('T')[0]}.db`);
     } else {
-        res.status(404).json({ error: "Banco não encontrado" });
+        res.status(404).json({ error: "Banco de dados não encontrado no servidor." });
     }
 });
 
@@ -123,21 +147,20 @@ router.post('/system/restore', upload.single('database'), (req, res) => {
     const dbPath = db.name; // Caminho real
 
     try {
-        // Obrigatório fechar a conexão no Windows antes de substituir o arquivo
+        // Obrigatório fechar a conexão no Windows antes de substituir o arquivo físico
         db.close(); 
         fs.copyFileSync(tempPath, dbPath);
-        fs.unlinkSync(tempPath);
+        fs.unlinkSync(tempPath); // Limpa o arquivo temporário
         
-        // Reinicia o aplicativo automaticamente para carregar o novo banco
+        // Reinicia o aplicativo automaticamente para carregar o novo banco de dados
         setTimeout(() => {
             app.relaunch();
             app.exit(0);
         }, 1000);
 
-        res.json({ success: true, message: "Backup restaurado com sucesso! Reiniciando..." });
+        res.json({ success: true, message: "Backup restaurado com sucesso. Reiniciando..." });
     } catch (err) {
-        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        res.status(500).json({ error: "Erro ao restaurar: " + err.message });
+        res.status(500).json({ error: "Falha catastrófica ao restaurar: " + err.message });
     }
 });
 

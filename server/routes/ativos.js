@@ -2,13 +2,26 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 
-// 1. Obter todos os ativos com cálculos (Quantidade e Preço Médio)
+// ============================================================================
+// 1. LISTAGEM DE ATIVOS (COM CÁLCULO DE PM E RELACIONAMENTOS V2.0)
+// ============================================================================
 router.get('/', (req, res) => {
     try {
-        const assets = db.prepare("SELECT * FROM Assets ORDER BY status, name").all();
+        const assets = db.prepare(`
+            SELECT A.*, 
+                   S.name as subcategory_name, 
+                   C.name as class_name,
+                   G.name as goal_name
+            FROM Assets A
+            LEFT JOIN Subcategories S ON A.subcategory_id = S.id
+            LEFT JOIN Classes C ON S.class_id = C.id
+            LEFT JOIN Goals G ON A.goal_id = G.id
+            ORDER BY A.status, A.name
+        `).all();
         
+        // Enriquecer com Preço Médio e Quantidade Total
         const enriched = assets.map(asset => {
-            const history = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ?").all(asset.id);
+            const history = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset.id);
             let totalQty = 0;
             let totalInvestido = 0;
             
@@ -35,149 +48,172 @@ router.get('/', (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. Aporte
+// ============================================================================
+// 2. CRIAÇÃO DE NOVO ATIVO (CORRIGIDO PARA V2 - BUCKETING E SETORES)
+// ============================================================================
+router.post('/', (req, res) => {
+    // Agora o backend aceita e processa todos os campos enviados pelo HTML
+    const { name, type, color, subcategory_id, goal_id, is_rebalancing_active } = req.body;
+    try {
+        db.prepare(`
+            INSERT INTO Assets (name, type, color, subcategory_id, goal_id, is_rebalancing_active, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'active')
+        `).run(
+            name, 
+            type, 
+            color || '#3b82f6', 
+            subcategory_id || null, 
+            goal_id || null, 
+            is_rebalancing_active ? 1 : 0
+        );
+        res.json({ success: true });
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
+});
+
+// ============================================================================
+// 3. OPERAÇÕES: APORTE E VENDA (COM MOTOR FISCAL DE IR)
+// ============================================================================
 router.post('/aporte', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
-    const amount = quantity * price;
     try {
-        db.transaction(() => {
-            db.prepare(`INSERT INTO EquityHistory (asset_id, type, amount, quantity, date) VALUES (?, 'contribution', ?, ?, ?)`).run(asset_id, amount, quantity, date);
-            db.prepare(`UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?`).run(amount, asset_id);
-        })();
+        const amount = quantity * price;
+        db.prepare("INSERT INTO EquityHistory (asset_id, type, amount, quantity, date) VALUES (?, 'contribution', ?, ?, ?)").run(asset_id, amount, quantity, date);
+        db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(amount, asset_id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. Venda
 router.post('/venda', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
-    const amount = quantity * price;
     try {
-        db.transaction(() => {
-            db.prepare(`INSERT INTO EquityHistory (asset_id, type, amount, quantity, date) VALUES (?, 'withdrawal', ?, ?, ?)`).run(asset_id, amount, quantity, date);
-            db.prepare(`UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?`).run(amount, asset_id);
-        })();
-        res.json({ success: true });
+        const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
+        if (!asset) return res.status(404).json({ error: "Ativo não encontrado" });
+
+        const history = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset_id);
+        let totalQty = 0;
+        let totalInvestido = 0;
+        
+        history.forEach(h => {
+            if (h.type === 'contribution') {
+                totalQty += h.quantity;
+                totalInvestido += h.amount;
+            } else if (h.type === 'withdrawal') {
+                totalQty -= h.quantity;
+                if (totalQty > 0) totalInvestido -= (totalInvestido / (totalQty + h.quantity)) * h.quantity;
+            }
+        });
+
+        const avgPrice = totalQty > 0 ? (totalInvestido / totalQty) : 0;
+        const lucroBrutoOperacao = (price - avgPrice) * quantity;
+        let taxDue = 0;
+
+        // MOTOR FISCAL: Calcula o IR devido com base na classe do ativo
+        if (lucroBrutoOperacao > 0) {
+            const tipo = asset.type.toUpperCase();
+            if (tipo.includes('AÇÃO') || tipo.includes('ACOES') || tipo.includes('BDR')) taxDue = lucroBrutoOperacao * 0.15; 
+            else if (tipo.includes('FII') || tipo.includes('ETF') || tipo.includes('FIAGRO') || tipo.includes('INFRA')) taxDue = lucroBrutoOperacao * 0.20;
+        }
+
+        const amount = quantity * price;
+        db.prepare("INSERT INTO EquityHistory (asset_id, type, amount, quantity, date, tax_due) VALUES (?, 'withdrawal', ?, ?, ?, ?)").run(asset_id, amount, quantity, date, taxDue);
+        db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(amount, asset_id);
+        
+        res.json({ success: true, lucro_apurado: lucroBrutoOperacao, imposto_gerado: taxDue });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 4. Rendimentos (Proventos / Dividendos)
-router.post('/rendimentos', (req, res) => {
+router.post('/rendimento', (req, res) => {
     const { asset_id, amount, date } = req.body;
     try {
-        db.prepare(`INSERT INTO EquityHistory (asset_id, type, amount, quantity, date) VALUES (?, 'dividend', ?, 0, ?)`).run(asset_id, amount, date);
+        db.prepare("INSERT INTO EquityHistory (asset_id, type, amount, quantity, date) VALUES (?, 'dividend', ?, 0, ?)").run(asset_id, amount, date);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 5. Histórico do Ativo
+// ============================================================================
+// 4. SINCRONIZAÇÃO DE COTAÇÕES E HISTÓRICO
+// ============================================================================
+router.post('/sync/:id', async (req, res) => {
+    try {
+        const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(req.params.id);
+        if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
+
+        const history = db.prepare("SELECT type, quantity FROM EquityHistory WHERE asset_id = ?").all(asset.id);
+        let totalQty = 0;
+        history.forEach(h => {
+            if (h.type === 'contribution') totalQty += h.quantity;
+            else if (h.type === 'withdrawal') totalQty -= h.quantity;
+        });
+
+        if (totalQty <= 0) return res.status(400).json({ error: "Você não possui cotas deste ativo para sincronizar." });
+
+        let currentPrice = 0;
+
+        if (['Ações', 'FIIs', 'BDRs', 'Fiagro', 'FI-Infra', 'Exterior'].includes(asset.type)) {
+            const tokenRow = db.prepare("SELECT value FROM Settings WHERE key = 'brapi_token'").get();
+            if (!tokenRow || !tokenRow.value) return res.status(400).json({ error: "Token da Brapi não configurado nos parâmetros." });
+            
+            const response = await fetch(`https://brapi.dev/api/quote/${asset.name}?token=${tokenRow.value}`);
+            const data = await response.json();
+            
+            if (data.error) return res.status(400).json({ error: data.message || "Erro retornado pela Brapi." });
+            if (data.results && data.results.length > 0) {
+                currentPrice = data.results[0].regularMarketPrice;
+            } else {
+                return res.status(400).json({ error: "Ticker não localizado na B3." });
+            }
+        } else if (asset.type === 'Cripto') {
+            const map = { 'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether', 'SOL': 'solana' };
+            const id = map[asset.name.toUpperCase()] || asset.name.toLowerCase();
+            const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=brl`);
+            const data = await response.json();
+            
+            if (data[id] && data[id].brl) {
+                currentPrice = data[id].brl;
+            } else {
+                return res.status(400).json({ error: "Criptomoeda não suportada ou símbolo incorreto na CoinGecko." });
+            }
+        }
+        
+        const novoSaldoProjetado = currentPrice * totalQty;
+        return res.json({ sugerido: currentPrice, novoSaldo: novoSaldoProjetado });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/aplicar-sync/:id', (req, res) => {
+    const { novo_saldo } = req.body;
+    try {
+        if (novo_saldo === undefined || novo_saldo === null) return res.status(400).json({ error: "Valor do novo saldo não fornecido." });
+        db.prepare("UPDATE Assets SET current_balance = ?, last_sync = CURRENT_TIMESTAMP WHERE id = ?").run(novo_saldo, req.params.id);
+        res.json({ success: true });
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
+});
+
 router.get('/history/:id', (req, res) => {
     try {
-        const history = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date DESC, id DESC").all(req.params.id);
-        res.json(history);
+        const rows = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date DESC, id DESC").all(req.params.id);
+        res.json(rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 6. Editar Histórico
-router.put('/history/:id', (req, res) => {
-    const { amount, quantity, date } = req.body;
+router.delete('/:id', (req, res) => {
     try {
-        db.prepare(`UPDATE EquityHistory SET amount = ?, quantity = ?, date = ? WHERE id = ?`).run(amount, quantity, date, req.params.id);
+        db.prepare("DELETE FROM Assets WHERE id = ?").run(req.params.id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 7. Excluir Histórico
 router.delete('/history/:id', (req, res) => {
     try {
         db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// 8. Rota de Busca de Tickers (Usada nos Parâmetros)
-router.get('/search-ticker', async (req, res) => {
-    const query = req.query.q;
-    if (!query) return res.json([]);
-    
-    try {
-        const tokenRow = db.prepare("SELECT value FROM Settings WHERE key = 'BRAPI_TOKEN'").get();
-        const token = tokenRow ? tokenRow.value : '';
-        
-        if (token) {
-            const response = await fetch(`https://brapi.dev/api/available?search=${query}&token=${token}`);
-            const data = await response.json();
-            const stocks = (data.stocks || []).slice(0, 5).map(ticker => ({ ticker, name: ticker, type: 'Ações' }));
-            return res.json(stocks);
-        }
-        res.json([]);
-    } catch (err) { res.json([]); }
-});
-
-// 9. NOVO: Sincronização de Mercado (A Rota que faltava para evitar o Erro 404)
-router.post('/sync', async (req, res) => {
-    const { asset_id, confirmar, novoSaldo } = req.body;
-    
-    try {
-        if (confirmar) {
-            // Efetivação da Sincronização
-            const asset = db.prepare("SELECT current_balance FROM Assets WHERE id = ?").get(asset_id);
-            const diferenca = novoSaldo - (asset ? asset.current_balance : 0);
-            
-            db.transaction(() => {
-                db.prepare("UPDATE Assets SET current_balance = ?, last_sync = date('now') WHERE id = ?").run(novoSaldo, asset_id);
-                // Registra o ganho ou perda no histórico (market_update)
-                if (diferenca !== 0) {
-                    db.prepare(`
-                        INSERT INTO EquityHistory (asset_id, type, amount, quantity, date)
-                        VALUES (?, 'market_update', ?, 0, date('now'))
-                    `).run(asset_id, diferenca);
-                }
-            })();
-            return res.json({ success: true });
-        } else {
-            // Modo de Simulação (Busca cotação online e sugere valor)
-            const asset = db.prepare("SELECT name, type FROM Assets WHERE id = ?").get(asset_id);
-            if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
-            
-            // Verifica Qtd Total
-            const qtyRow = db.prepare(`SELECT SUM(CASE WHEN type = 'contribution' THEN quantity WHEN type = 'withdrawal' THEN -quantity ELSE 0 END) as total_qty FROM EquityHistory WHERE asset_id = ?`).get(asset_id);
-            const totalQty = qtyRow ? qtyRow.total_qty : 0;
-            let currentPrice = 0;
-            
-            if (asset.type === 'Ações' || asset.type === 'FIIs') {
-                const tokenRow = db.prepare("SELECT value FROM Settings WHERE key = 'BRAPI_TOKEN'").get();
-                const token = tokenRow ? tokenRow.value : '';
-                if (!token) return res.status(400).json({ error: "Token Brapi ausente nos Parâmetros." });
-                
-                const response = await fetch(`https://brapi.dev/api/quote/${asset.name}?token=${token}`);
-                const data = await response.json();
-                if (data.error) return res.status(400).json({ error: data.message || "Erro na B3." });
-                if (data.results && data.results.length > 0) {
-                    currentPrice = data.results[0].regularMarketPrice;
-                } else {
-                    return res.status(400).json({ error: "Ticker não localizado na B3." });
-                }
-            } else if (asset.type === 'Cripto') {
-                const map = { 'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether' };
-                const id = map[asset.name.toUpperCase()] || asset.name.toLowerCase();
-                const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=brl`);
-                const data = await response.json();
-                if (data[id] && data[id].brl) {
-                    currentPrice = data[id].brl;
-                } else {
-                    return res.status(400).json({ error: "Criptomoeda não suportada ou símbolo incorreto." });
-                }
-            } else {
-                return res.status(400).json({ error: "Atualização automática indisponível para esta classe." });
-            }
-            
-            const novoSaldoProjetado = currentPrice * totalQty;
-            return res.json({ sugerido: currentPrice, novoSaldo: novoSaldoProjetado });
-        }
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
 });
 
 module.exports = router;

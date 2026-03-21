@@ -1,26 +1,24 @@
 {
-  "name": "myequity-electron",
-  "version": "1.0.0",
-  "description": "Gestão Patrimonial Estratégica: Ativos, Dívidas e PTTC",
+  "name": "myequity-v2",
+  "version": "2.0.0",
+  "description": "Gestão Patrimonial Estratégica V2 - Wealth Management",
   "main": "main.js",
   "scripts": {
     "start": "electron . --no-sandbox",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder -mwl",
-    "postinstall": "electron-builder install-app-deps",
     "rebuild": "electron-rebuild"
   },
-  "author": "Coronel",
+  "author": "Aurélio",
   "license": "ISC",
   "dependencies": {
     "axios": "^1.6.0",
+    "better-sqlite3": "^11.0.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "better-sqlite3": "^11.0.0",
-    "uuid": "^9.0.1",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "electron": "^28.3.0",
@@ -28,16 +26,27 @@
     "electron-rebuild": "^3.2.9"
   },
   "build": {
-    "appId": "com.myequity.app",
-    "productName": "MyEquity",
+    "appId": "com.myequity.v2",
+    "productName": "MyEquity V2",
     "directories": {
       "output": "dist"
     },
     "files": [
       "**/*",
-      "!node_modules/*",
-      "node_modules/better-sqlite3/**/*"
+      "!bd_myequity.db",
+      "!bd_myequity.db-journal",
+      "!.gitignore",
+      "!dist",
+      "!.git"
     ],
-    "asar": true
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "MyEquity V2"
+    }
   }
 }

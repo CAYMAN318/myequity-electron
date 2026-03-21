@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyEquity - Gestão de Ativos</title>
+    <title>MyEquity - Gestão de Ativos V2</title>
     
     <!-- Bibliotecas Locais -->
     <script src="libs/tailwindcss.js"></script>
@@ -12,664 +12,819 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
-        
-        .asset-card { 
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-            border: 1px solid #e2e8f0; 
-            min-height: 460px; 
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
         }
-        .asset-card:hover { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); }
+        span.icon-wrapper { 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            line-height: 0; 
+        }
+        .asset-card { 
+            transition: all 0.3s ease; 
+            border: 1px solid #e2e8f0; 
+            min-height: 480px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            background: white; 
+            border-radius: 24px;
+        }
+        .asset-card:hover { 
+            border-color: #3b82f6; 
+            transform: translateY(-4px); 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); 
+        }
+        .modal-blur { 
+            backdrop-filter: blur(8px); 
+            background-color: rgba(15, 23, 42, 0.6); 
+        }
+        .badge { 
+            display: inline-flex; 
+            align-items: center; 
+            padding: 2px 8px; 
+            border-radius: 9999px; 
+            font-size: 0.7rem; 
+            font-weight: 600; 
+            margin-right: 4px; 
+            margin-bottom: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar { 
+            width: 6px; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb { 
+            background: #cbd5e1; 
+            border-radius: 10px; 
+        }
         
-        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.6); }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .custom-scrollbar-thin::-webkit-scrollbar { width: 3px; }
-        .custom-scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        /* Animação do Dropdown Autocomplete */
+        .search-results { 
+            animation: slideDown 0.2s ease-out forwards; 
+            transform-origin: top; 
+            max-height: 200px; 
+            overflow-y: auto;
+        }
+        @keyframes slideDown { 
+            from { opacity: 0; transform: scaleY(0.95); } 
+            to { opacity: 1; transform: scaleY(1); } 
+        }
     </style>
 </head>
 <body class="p-8 text-left">
 
-    <div id="app" class="max-w-7xl mx-auto pb-20">
+    <div id="app" class="max-w-7xl mx-auto space-y-6">
         
-        <!-- Cabeçalho Principal -->
-        <div class="flex justify-between items-end mb-10 text-left">
+        <!-- CABEÇALHO -->
+        <div class="flex justify-between items-end mb-8">
             <div>
-                <h2 class="text-3xl font-black text-slate-900 tracking-tight uppercase italic">Carteira de Investimentos</h2>
-                <p class="text-slate-500 font-medium italic">Gestão de alocações, aportes e sincronização de mercado.</p>
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Carteira de Ativos</h1>
+                <p class="text-slate-500 mt-1">Lançamento de Aportes, Vendas, Rendimentos, Extrato e Sincronização.</p>
             </div>
-            <div class="bg-white px-8 py-4 rounded-[24px] border border-slate-100 shadow-sm text-center">
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Patrimônio Alocado</p>
-                <p class="text-3xl font-black text-blue-600 tracking-tighter">{{ formatarMoeda(totalAplicado) }}</p>
-            </div>
-        </div>
-
-        <!-- Grelha de Ativos -->
-        <div v-if="ativos.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <div v-for="ativo in ativos" :key="ativo.id" class="asset-card bg-white p-8 rounded-[48px] relative">
-                
-                <div class="flex justify-between items-start mb-6">
-                    <div class="flex items-start gap-4">
-                        <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0" :style="{backgroundColor: ativo.color || '#3b82f6'}">
-                            <span class="icon-wrapper" v-html="getIcon(getIconByType(ativo.type), 28)"></span>
-                        </div>
-                        <div class="overflow-hidden">
-                            <h3 class="font-black text-slate-800 text-xl tracking-tight uppercase truncate" :title="ativo.name">{{ ativo.name }}</h3>
-                            <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest truncate">{{ ativo.type }}</p>
-                        </div>
-                    </div>
-
-                    <!-- NOVO: Botão Excluir Ativo -->
-                    <button @click="excluirAtivo(ativo.id)" class="p-3 bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-600 rounded-2xl transition-all shadow-sm" title="Remover Ativo">
-                        <span class="icon-wrapper" v-html="getIcon('trash-2', 18)"></span>
-                    </button>
-                </div>
-
-                <!-- Balanço -->
-                <div class="bg-slate-50/80 rounded-3xl p-6 mb-6 border border-slate-100">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Saldo Atual</p>
-                    <p class="text-2xl font-black text-slate-900 tracking-tighter truncate">{{ formatarMoeda(ativo.current_balance) }}</p>
-                    
-                    <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-200/60">
-                        <div>
-                            <p class="text-[9px] font-black uppercase text-slate-400">Quantidade</p>
-                            <p class="text-xs font-bold text-slate-700">{{ ativo.total_quantity }}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-[9px] font-black uppercase text-slate-400">Preço Médio</p>
-                            <p class="text-xs font-bold text-slate-700">{{ formatarMoeda(ativo.avg_price) }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Botões de Ação -->
-                <div class="grid grid-cols-2 gap-3 mt-auto">
-                    <button @click="sincronizar(ativo)" class="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                        <span class="icon-wrapper" v-html="getIcon('refresh-cw', 14)"></span> Mercado
-                    </button>
-                    <button @click="prepararRendimento(ativo)" class="py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                        <span class="icon-wrapper" v-html="getIcon('coins', 14)"></span> Proventos
-                    </button>
-                    <button @click="prepararAporte(ativo)" class="py-4 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                        <span class="icon-wrapper" v-html="getIcon('arrow-up-circle', 14)"></span> Aporte
-                    </button>
-                    <button @click="prepararVenda(ativo)" class="py-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                        <span class="icon-wrapper" v-html="getIcon('arrow-down-circle', 14)"></span> Venda
-                    </button>
-                </div>
-                
-                <!-- Botão Extrato -->
-                <button @click="abrirExtrato(ativo)" class="w-full mt-3 py-4 bg-slate-900 hover:bg-black text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                    <span class="icon-wrapper" v-html="getIcon('list', 14)"></span> Ver Extrato
+            <div class="flex flex-col items-end gap-3">
+                <button @click="abrirModalNovoAtivo" class="py-2.5 px-5 bg-blue-600 text-white hover:bg-blue-700 font-bold text-sm rounded-xl transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/30">
+                    <span class="icon-wrapper" v-html="getIcon('plus')"></span> Novo Investimento
                 </button>
+                <div class="text-right">
+                    <p class="text-sm font-medium text-slate-500">Saldo Projetado Total</p>
+                    <p class="text-2xl font-bold text-slate-800">{{ formatarMoeda(totalAplicado) }}</p>
+                </div>
             </div>
         </div>
 
-        <div v-else class="text-center py-32 bg-white rounded-[48px] border-2 border-dashed border-slate-100">
-            <div class="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-200">
-                <span class="icon-wrapper" v-html="getIcon('pie-chart', 40)"></span>
-            </div>
-            <h3 class="text-xl font-black text-slate-900 uppercase">Carteira Vazia</h3>
-            <p class="text-slate-400 max-w-sm mx-auto text-sm mt-2 font-medium">Habilite baldes de investimento na aba de Parâmetros para começar a alocar o seu capital.</p>
-        </div>
-
-        <!-- SEÇÃO DE GRÁFICOS (ABAIXO DOS CARDS) -->
-        <div v-show="ativos.length > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12 animate-in fade-in duration-500">
-            
-            <!-- Gráfico 1: Evolução Patrimonial (Linha) -->
-            <div class="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col">
-                <div class="mb-6 flex justify-between items-center">
-                    <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase italic">Evolução da Carteira</h3>
-                    <span class="text-[9px] font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-widest">Ativos</span>
-                </div>
-                <div class="w-full flex-1 min-h-[300px] relative">
-                    <canvas id="chartEvolucaoAtivos"></canvas>
-                </div>
-            </div>
-
-            <!-- Gráfico 2: Distribuição Estratégica (Pizza) -->
-            <div class="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm flex flex-col">
-                <div class="mb-6 text-center">
-                    <h3 class="text-lg font-black text-slate-900 tracking-tight uppercase italic">Distribuição Estratégica</h3>
-                </div>
-                <div class="w-full flex justify-center items-center flex-1 min-h-[300px]">
-                    <canvas id="chartPizzaAlocacao"></canvas>
-                </div>
-            </div>
-            
-        </div>
-
-        <!-- MODAL: APORTE / VENDA -->
-        <div v-if="modalOp.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalOp.aberto = false">
-            <div class="bg-white rounded-[48px] w-full max-w-lg shadow-2xl p-10 text-left animate-in fade-in zoom-in duration-200">
-                <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">
-                    {{ formOp.tipo === 'aporte' ? 'Registrar Aporte' : 'Registrar Venda' }}
-                </h3>
+        <!-- GRID DE ATIVOS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div v-for="asset in ativos" :key="asset.id" class="asset-card p-6">
                 
-                <div class="space-y-6">
+                <!-- PARTE SUPERIOR DO CARTÃO -->
+                <div>
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-sm" :style="{ backgroundColor: asset.color }">
+                            {{ asset.name.charAt(0) }}
+                        </div>
+                        <div class="flex gap-2">
+                            <!-- BOTÃO EXCLUIR REFINADO (Sólido com Borda) -->
+                            <button @click="excluirAtivo(asset.id)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-rose-300 hover:text-rose-600 shadow-sm transition-all" title="Excluir Investimento">
+                                <span class="icon-wrapper" v-html="getIcon('trash', 18)"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <h2 class="text-xl font-bold text-slate-800 tracking-tight">{{ asset.name }}</h2>
+                    <p class="text-sm text-slate-500 mb-3">{{ asset.type }}</p>
+
+                    <!-- BADGES (Etiquetas de Classificação) -->
+                    <div class="flex flex-wrap mb-4">
+                        <span v-if="asset.goal_name" class="badge bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            <span class="icon-wrapper mr-1" v-html="getIcon('target', 10)"></span> {{ asset.goal_name }}
+                        </span>
+                        <span v-if="asset.subcategory_name" class="badge bg-blue-50 text-blue-700 border border-blue-100">
+                            <span class="icon-wrapper mr-1" v-html="getIcon('pie-chart', 10)"></span> {{ asset.subcategory_name }}
+                        </span>
+                        <span v-if="asset.is_rebalancing_active === 0" class="badge bg-slate-100 text-slate-500 border border-slate-200">
+                            Rebal. Inativo
+                        </span>
+                    </div>
+
+                    <!-- CAIXA DE MÉTRICAS -->
+                    <div class="bg-slate-50 rounded-xl p-4 mt-2 border border-slate-100">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500">Saldo Projetado</span>
+                            <span class="text-sm font-bold text-slate-800">{{ formatarMoeda(asset.current_balance) }}</span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500">Preço Médio</span>
+                            <span class="text-xs font-bold text-slate-700">{{ formatarMoeda(asset.avg_price) }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-xs font-medium text-slate-500">Quantidade</span>
+                            <span class="text-xs font-bold text-slate-700">{{ asset.total_quantity }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PARTE INFERIOR DO CARTÃO (Ações) -->
+                <div class="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button @click="prepararAporte(asset)" class="py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium text-sm rounded-xl transition-colors flex justify-center items-center gap-1">
+                            <span class="icon-wrapper" v-html="getIcon('plus', 16)"></span> Aporte
+                        </button>
+                        <button @click="prepararVenda(asset)" class="py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-medium text-sm rounded-xl transition-colors flex justify-center items-center gap-1">
+                            <span class="icon-wrapper" v-html="getIcon('minus', 16)"></span> Venda
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <button @click="prepararRendimento(asset)" class="py-2 bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-purple-100">
+                            <span class="icon-wrapper" v-html="getIcon('dollar-sign', 14)"></span> Provento
+                        </button>
+                        <button @click="abrirExtrato(asset)" class="py-2 bg-slate-50 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-slate-100">
+                            <span class="icon-wrapper" v-html="getIcon('file-text', 14)"></span> Extrato
+                        </button>
+                    </div>
+
+                    <!-- BOTÃO INTELIGENTE DE ATUALIZAÇÃO -->
+                    <button v-if="['Ações', 'FIIs', 'BDRs', 'Fiagro', 'FI-Infra', 'Cripto', 'Exterior'].includes(asset.type)" @click="prepararSync(asset)" class="w-full py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-blue-100 mt-1">
+                        <span class="icon-wrapper" v-html="getIcon('refresh-cw', 14)"></span> Sincronizar Cotação
+                    </button>
+                    <button v-else-if="['Tesouro', 'CDB/LCI', 'Fundos', 'Outros'].includes(asset.type)" @click="prepararAtualizacaoManual(asset)" class="w-full py-2 bg-teal-50 text-teal-700 hover:bg-teal-100 font-medium text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-teal-100 mt-1">
+                        <span class="icon-wrapper" v-html="getIcon('trending-up', 14)"></span> Atualização Manual
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SESSÃO DE GRÁFICOS -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+            <!-- Gráfico de Linha (Fluxo de Caixa) -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">Evolução dos Aportes (Fluxo de Caixa)</h3>
+                <p class="text-xs text-slate-500 mb-6">Acompanhe o tamanho dos seus aportes mensais (barras) frente ao crescimento acumulado (linha).</p>
+                <div class="relative h-64 w-full">
+                    <canvas id="lineChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Gráfico de Pizza (Composição) -->
+            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">Composição Atual</h3>
+                <p class="text-xs text-slate-500 mb-6">Distribuição patrimonial entre os ativos da carteira.</p>
+                <div class="relative h-64 w-full flex justify-center items-center">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================================= -->
+        <!-- MODAIS DO SISTEMA                                                         -->
+        <!-- ========================================================================= -->
+
+        <!-- MODAL: NOVO ATIVO -->
+        <div v-if="modalNovoAtivo.aberto" @click.self="fecharModalNovoAtivo" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-600 text-white rounded-t-3xl">
+                    <h2 class="text-lg font-bold flex items-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon('plus-circle')"></span>
+                        Novo Investimento
+                    </h2>
+                    <button @click="fecharModalNovoAtivo" class="text-blue-100 hover:text-white transition-colors">
+                        <span class="icon-wrapper" v-html="getIcon('x')"></span>
+                    </button>
+                </div>
+                
+                <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar max-h-[70vh]">
+                    <!-- Autocomplete -->
+                    <div class="relative">
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Nome ou Ticker</label>
+                        <input v-model="formNovoAtivo.name" @input="buscarSugestoes" @focus="buscarSugestoes" @blur="fecharSugestoesComAtraso" type="text" autocomplete="off" placeholder="Ex: PETR4, Bitcoin..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        
+                        <!-- Lista Suspensa de Sugestões -->
+                        <div v-if="sugestoes.length > 0" class="search-results absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl custom-scrollbar">
+                            <div v-for="sugestao in sugestoes" @click="selecionarTicker(sugestao)" class="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0 transition-colors">
+                                <div>
+                                    <span class="font-bold text-sm text-slate-800">{{ sugestao.ticker }}</span>
+                                    <span class="text-xs text-slate-500 ml-2">{{ sugestao.nome }}</span>
+                                </div>
+                                <span class="text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide" :class="getTypeColor(sugestao.tipo)">
+                                    {{ sugestao.tipo }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Quantidade</label>
-                            <input v-model.number="formOp.quantity" type="number" step="0.00000001" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Classe da Aplicação</label>
+                            <select v-model="formNovoAtivo.type" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                                <option value="Ações">Ações (B3)</option>
+                                <option value="FIIs">FIIs (B3)</option>
+                                <option value="BDRs">BDRs (B3)</option>
+                                <option value="Fiagro">Fiagro (B3)</option>
+                                <option value="FI-Infra">FI-Infra (B3)</option>
+                                <option value="Tesouro">Tesouro Direto</option>
+                                <option value="CDB/LCI">Renda Fixa (Bancos)</option>
+                                <option value="Fundos">Fundos de Investimento</option>
+                                <option value="Cripto">Criptomoedas</option>
+                                <option value="Exterior">Exterior (Stocks)</option>
+                                <option value="Caixa">Caixa / Conta</option>
+                                <option value="Outros">Outros</option>
+                            </select>
                         </div>
                         <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Preço Unitário</label>
-                            <input v-model.number="formOp.price" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Cor Identidade</label>
+                            <input v-model="formNovoAtivo.color" type="color" class="w-full h-11 rounded-xl cursor-pointer border-0 p-0 shadow-sm">
                         </div>
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Data da Operação</label>
-                        <input v-model="formOp.date" type="date" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none focus:border-blue-500">
-                    </div>
-
-                    <!-- Resumo da Operação -->
-                    <div class="p-6 rounded-3xl" :class="formOp.tipo === 'aporte' ? 'bg-blue-50' : 'bg-rose-50'">
-                        <p class="text-[10px] font-black uppercase tracking-widest mb-1" :class="formOp.tipo === 'aporte' ? 'text-blue-500' : 'text-rose-500'">Volume Total</p>
-                        <p class="text-3xl font-black tracking-tighter" :class="formOp.tipo === 'aporte' ? 'text-blue-700' : 'text-rose-700'">
-                            {{ formatarMoeda(formOp.quantity * formOp.price) }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="flex gap-4 mt-10">
-                    <button @click="modalOp.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
-                    <button @click="confirmarOperacao" class="flex-1 py-5 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all"
-                            :class="formOp.tipo === 'aporte' ? 'bg-blue-600' : 'bg-rose-600'">
-                        Confirmar
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- MODAL: SINCRONIZAÇÃO DE MERCADO / ATUALIZAÇÃO MANUAL -->
-        <div v-if="modalSync.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalSync.aberto = false">
-            <div class="bg-white rounded-[48px] w-full max-w-md shadow-2xl p-10 text-center animate-in fade-in zoom-in duration-200">
-                <div class="w-20 h-20 mx-auto rounded-3xl bg-slate-100 text-slate-500 flex items-center justify-center mb-6" :class="{'animate-spin': modalSync.loading}">
-                    <span class="icon-wrapper" v-html="getIcon(modalSync.isManual ? 'edit-3' : 'refresh-cw', 40)"></span>
-                </div>
-                <h3 class="text-2xl font-black text-slate-900 mb-2 uppercase tracking-tight italic">{{ modalSync.isManual ? 'Atualização Manual' : 'Sync Market' }}</h3>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">{{ modalSync.ativo?.name }}</p>
-                
-                <div v-if="modalSync.loading" class="py-10 text-slate-400 font-medium">Buscando cotação atualizada na API...</div>
-                
-                <div v-else class="space-y-6 text-left">
-                    <!-- Só exibe Cotação se for automático -->
-                    <div v-if="!modalSync.isManual" class="bg-slate-50 p-6 rounded-3xl">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Cotação Encontrada</p>
-                        <p class="text-2xl font-black text-slate-900">{{ formatarMoeda(modalSync.sugerido) }}</p>
-                    </div>
                     
-                    <!-- Campo de Saldo Final (Editável se for Manual) -->
-                    <div class="bg-blue-50 p-6 rounded-3xl transition-all" :class="modalSync.isManual ? 'border-2 border-blue-400 shadow-inner' : 'border border-blue-100'">
-                        <p class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2">
-                            {{ modalSync.isManual ? 'Digite o Novo Saldo Atualizado (R$)' : 'Novo Saldo Projetado' }}
-                        </p>
-                        <input v-if="modalSync.isManual" v-model.number="modalSync.novoSaldo" type="number" step="0.01" class="w-full bg-white border border-blue-200 rounded-xl p-3 text-2xl font-black text-blue-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all">
-                        <p v-else class="text-2xl font-black text-blue-700">{{ formatarMoeda(modalSync.novoSaldo) }}</p>
+                    <hr class="border-slate-100">
+                    
+                    <!-- Configurações V2.0 (Bucketing e Setores) -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Setor / Subcategoria</label>
+                            <select v-model="formNovoAtivo.subcategory_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                                <option value="">-- Não vincular --</option>
+                                <option v-for="sub in subcategories" :value="sub.id">{{ sub.class_name }} > {{ sub.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Objetivo (Bucketing)</label>
+                            <select v-model="formNovoAtivo.goal_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-colors">
+                                <option value="">-- Dinheiro Livre --</option>
+                                <option v-for="goal in goals" :value="goal.id">🎯 {{ goal.name }}</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 cursor-pointer" @click="formNovoAtivo.is_rebalancing_active = !formNovoAtivo.is_rebalancing_active">
+                            <div class="w-5 h-5 rounded border flex items-center justify-center transition-colors" :class="formNovoAtivo.is_rebalancing_active ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'">
+                                <span v-if="formNovoAtivo.is_rebalancing_active" class="icon-wrapper text-white" v-html="getIcon('check', 14)"></span>
+                            </div>
+                            <label class="text-sm text-slate-700 font-medium cursor-pointer select-none">Incluir no Rebalanceamento?</label>
+                        </div>
                     </div>
-
-                    <p v-if="modalSync.isManual" class="text-[10px] font-bold text-slate-400 text-center mt-2 px-4 leading-relaxed">
-                        A diferença entre o saldo antigo e este novo valor será registrada automaticamente como "Valorização" ou desvalorização no seu extrato.
-                    </p>
                 </div>
-
-                <div v-if="!modalSync.loading" class="flex gap-4 mt-10">
-                    <button @click="modalSync.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
-                    <button @click="confirmarSync" class="flex-2 py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">
-                        Aplicar
-                    </button>
+                <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-between items-center">
+                    <div class="flex gap-2 w-full">
+                        <button @click="fecharModalNovoAtivo" class="flex-1 px-5 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                        <button @click="salvarNovoAtivo" class="flex-1 px-6 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-colors">Criar Ativo</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- MODAL: RENDIMENTOS -->
-        <div v-if="modalRendimento.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalRendimento.aberto = false">
-            <div class="bg-white rounded-[48px] w-full max-w-md shadow-2xl p-10 text-left animate-in fade-in zoom-in duration-200">
-                <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">Registrar Provento</h3>
-                
-                <div class="space-y-6">
+        <!-- MODAL: APORTE E VENDA -->
+        <div v-if="modalOp.aberto" @click.self="modalOp.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+                <div class="p-6 border-b border-slate-100" :class="modalOp.tipo === 'aporte' ? 'bg-emerald-50' : 'bg-rose-50'">
+                    <h2 class="text-xl font-bold flex items-center gap-2" :class="modalOp.tipo === 'aporte' ? 'text-emerald-700' : 'text-rose-700'">
+                        <span class="icon-wrapper" v-html="getIcon(modalOp.tipo === 'aporte' ? 'arrow-down-circle' : 'arrow-up-circle')"></span>
+                        {{ modalOp.tipo === 'aporte' ? 'Novo Aporte' : 'Registrar Venda' }}
+                    </h2>
+                    <p class="text-sm mt-1" :class="modalOp.tipo === 'aporte' ? 'text-emerald-600' : 'text-rose-600'">{{ formOp.asset_name }}</p>
+                </div>
+                <div class="p-6 space-y-4">
                     <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Valor Recebido (R$)</label>
-                        <input v-model.number="formRendimento.amount" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-emerald-500">
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Data</label>
+                        <input type="date" v-model="formOp.date" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Data do Recebimento</label>
-                        <input v-model="formRendimento.date" type="date" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none focus:border-emerald-500">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Qtd</label>
+                            <input type="number" step="0.00000001" v-model="formOp.quantity" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Valor Un. (R$)</label>
+                            <input type="number" step="0.01" v-model="formOp.price" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                        <span class="text-xs text-slate-500 block mb-1">Volume Financeiro Total</span>
+                        <span class="text-lg font-bold text-slate-800">{{ formatarMoeda(formOp.quantity * formOp.price) }}</span>
                     </div>
                 </div>
-
-                <div class="flex gap-4 mt-10">
-                    <button @click="modalRendimento.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
-                    <button @click="confirmarRendimento" class="flex-2 py-5 bg-emerald-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">
-                        Lançar Rendimento
-                    </button>
+                <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    <button @click="modalOp.aberto = false" class="flex-1 py-3 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button @click="confirmarOperacao" class="flex-1 py-3 text-sm font-bold text-white rounded-xl shadow-md transition-colors" :class="modalOp.tipo === 'aporte' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">Confirmar</button>
                 </div>
             </div>
         </div>
 
-        <!-- MODAL: EXTRATO / HISTÓRICO -->
-        <div v-if="modalExtrato.aberto" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-blur" @click.self="modalExtrato.aberto = false">
-            <div class="bg-white rounded-[48px] w-full max-w-2xl shadow-2xl p-10 text-left overflow-hidden animate-in fade-in zoom-in duration-200">
-                
-                <div class="flex justify-between items-start mb-8">
+        <!-- MODAL: RENDIMENTO (PROVENTO) -->
+        <div v-if="modalRendimento.aberto" @click.self="modalRendimento.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+                <div class="p-6 border-b border-slate-100 bg-purple-50">
+                    <h2 class="text-xl font-bold flex items-center gap-2 text-purple-700">
+                        <span class="icon-wrapper" v-html="getIcon('dollar-sign')"></span>Lançar Provento
+                    </h2>
+                    <p class="text-sm mt-1 text-purple-600">{{ formRendimento.asset_name }}</p>
+                </div>
+                <div class="p-6 space-y-4">
                     <div>
-                        <h3 class="text-2xl font-black text-slate-900 tracking-tight uppercase italic">Extrato</h3>
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">{{ modalExtrato.ativo.name }}</p>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Data</label>
+                        <input type="date" v-model="formRendimento.date" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 outline-none">
                     </div>
-                    <button @click="modalExtrato.aberto = false" class="w-12 h-12 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center transition-colors">
-                        <span class="icon-wrapper" v-html="getIcon('x', 20)"></span>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Valor (R$)</label>
+                        <input type="number" step="0.01" v-model="formRendimento.amount" class="w-full border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 outline-none">
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    <button @click="modalRendimento.aberto = false" class="flex-1 py-3 text-sm font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button @click="confirmarRendimento" class="flex-1 py-3 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: SINCRONIZAÇÃO AUTOMÁTICA -->
+        <div v-if="modalSync.aberto" @click.self="modalSync.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+                <div class="p-6 border-b border-slate-100 bg-blue-50">
+                    <h2 class="text-xl font-bold flex items-center gap-2 text-blue-700">
+                        <span class="icon-wrapper" v-html="getIcon('refresh-cw')"></span>Atualizar Cotação
+                    </h2>
+                    <p class="text-sm mt-1 text-blue-600">{{ modalSync.asset_name }}</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div v-if="modalSync.carregando" class="text-center py-6">
+                        <span class="icon-wrapper animate-spin text-blue-500 mb-3" v-html="getIcon('loader', 32)"></span>
+                        <p class="text-sm text-slate-500">Consultando mercado...</p>
+                    </div>
+                    <div v-else-if="modalSync.erro" class="text-center py-4">
+                        <span class="icon-wrapper text-rose-500 mb-2" v-html="getIcon('alert-triangle', 32)"></span>
+                        <p class="text-sm text-rose-600">{{ modalSync.erro }}</p>
+                    </div>
+                    <div v-else class="space-y-4">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between">
+                            <span class="text-sm text-slate-500">Cotação Atualizada</span>
+                            <span class="font-bold text-slate-800">{{ formatarMoeda(modalSync.sugerido) }}</span>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between">
+                            <span class="text-sm text-blue-700">Novo Saldo Financeiro</span>
+                            <span class="text-lg font-bold text-blue-800">{{ formatarMoeda(modalSync.novoSaldo) }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    <button @click="modalSync.aberto = false" class="flex-1 py-3 text-sm font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button v-if="!modalSync.carregando && !modalSync.erro" @click="confirmarSync" class="flex-1 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md">Atualizar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: ATUALIZAÇÃO MANUAL -->
+        <div v-if="modalAtualizacaoManual.aberto" @click.self="modalAtualizacaoManual.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+                <div class="p-6 border-b border-slate-100 bg-teal-50">
+                    <h2 class="text-xl font-bold flex items-center gap-2 text-teal-700">
+                        <span class="icon-wrapper" v-html="getIcon('trending-up')"></span>Atualização Manual
+                    </h2>
+                    <p class="text-sm mt-1 text-teal-600">{{ formAtualizacao.asset_name }}</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 flex justify-between">
+                        <span class="text-xs font-medium text-slate-500">Saldo Atual</span>
+                        <span class="font-bold text-slate-700">{{ formatarMoeda(formAtualizacao.saldoAtual) }}</span>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Novo Saldo Bruto (R$)</label>
+                        <input type="number" step="0.01" v-model="formAtualizacao.novoSaldo" class="w-full border border-teal-300 rounded-xl px-4 py-3 text-lg font-bold focus:ring-2 focus:ring-teal-500 outline-none">
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    <button @click="modalAtualizacaoManual.aberto = false" class="flex-1 py-3 text-sm font-bold bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button @click="confirmarAtualizacaoManual" class="flex-1 py-3 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-md">Atualizar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: EXTRATO (Histórico de Movimentações) -->
+        <div v-if="modalExtrato.aberto" @click.self="fecharModalExtrato" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                        <h2 class="text-xl font-bold flex items-center gap-2 text-slate-800">
+                            <span class="icon-wrapper text-slate-500" v-html="getIcon('file-text')"></span>
+                            Extrato Histórico
+                        </h2>
+                        <p class="text-sm mt-1 text-slate-500">{{ modalExtrato.asset_name }}</p>
+                    </div>
+                    <button @click="fecharModalExtrato" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+                        <span class="icon-wrapper" v-html="getIcon('x')"></span>
                     </button>
                 </div>
+                <div class="p-6 space-y-3 overflow-y-auto custom-scrollbar bg-slate-50 flex-grow">
+                    
+                    <div v-if="historicoAtivo.length === 0" class="text-center py-8 text-slate-400">
+                        <span class="icon-wrapper mb-2 opacity-50" v-html="getIcon('inbox', 32)"></span>
+                        <p class="text-sm">Nenhuma movimentação encontrada.</p>
+                    </div>
 
-                <!-- Lista de Lançamentos -->
-                <div class="max-h-[50vh] overflow-y-auto custom-scrollbar-thin pr-4 space-y-3">
-                    <div v-for="h in historicoAtivo" :key="h.id" class="flex justify-between items-center p-5 rounded-3xl border border-slate-50 bg-slate-50/50 hover:bg-white transition-all group">
-                        
+                    <div v-for="h in historicoAtivo" :key="h.id" class="bg-white p-4 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm">
                         <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" :class="getHistColor(h.type)">
-                                <span class="icon-wrapper" v-html="getIcon(h.type === 'contribution' ? 'arrow-up' : h.type === 'withdrawal' ? 'arrow-down' : h.type === 'dividend' ? 'coins' : 'bar-chart', 16)"></span>
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center" :class="getHistColor(h.type)">
+                                <span class="icon-wrapper" v-html="getIconByType(h.type)"></span>
                             </div>
                             <div>
-                                <p class="text-xs font-black uppercase tracking-widest" :class="getHistColor(h.type).split(' ')[1]">{{ traduzirTipo(h.type) }}</p>
-                                <p class="text-[9px] font-bold text-slate-400 mt-1">{{ formatarData(h.date) }} <span v-if="h.quantity > 0">• Qtd: {{ h.quantity }}</span></p>
+                                <p class="text-sm font-bold text-slate-800">{{ traduzirTipo(h.type) }}</p>
+                                <p class="text-xs text-slate-500">{{ formatarData(h.date) }}</p>
                             </div>
                         </div>
-                        
-                        <div class="flex items-center gap-6">
-                            <span class="text-base font-black tracking-tighter" :class="getHistColor(h.type).split(' ')[1]">
-                                {{ formatarMoeda(h.amount) }}
-                            </span>
-                            
-                            <!-- Ações: Editar/Excluir -->
-                            <div class="flex gap-2">
-                                <button @click="editarHistorico(h)" class="p-2 text-slate-400 bg-white hover:bg-blue-50 hover:text-blue-600 rounded-xl border border-slate-100 shadow-sm transition-all" title="Editar Lançamento">
-                                    <span class="icon-wrapper" v-html="getIcon('edit-2', 16)"></span>
-                                </button>
-                                <button @click="excluirHistorico(h.id)" class="p-2 text-slate-400 bg-white hover:bg-rose-50 hover:text-rose-600 rounded-xl border border-slate-100 shadow-sm transition-all" title="Eliminar Lançamento">
-                                    <span class="icon-wrapper" v-html="getIcon('trash-2', 16)"></span>
-                                </button>
-                            </div>
+                        <div class="text-right">
+                            <p class="text-sm font-bold" :class="h.type === 'withdrawal' ? 'text-rose-600' : (isSyncLegacy(h.type) ? 'text-blue-600' : (h.type === 'dividend' ? 'text-purple-600' : 'text-emerald-600'))">
+                                {{ h.type === 'withdrawal' ? '-' : (isSyncLegacy(h.type) ? '' : '+') }}{{ formatarMoeda(h.amount) }}
+                            </p>
+                            <p v-if="h.quantity > 0" class="text-xs text-slate-500">{{ h.quantity }} cotas</p>
                         </div>
                     </div>
-                    
-                    <div v-if="historicoAtivo.length === 0" class="text-center py-10">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sem movimentos registados.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- MODAL: EDITAR HISTÓRICO -->
-        <div v-if="modalEditHist.aberto" class="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-blur" @click.self="modalEditHist.aberto = false">
-            <div class="bg-white rounded-[48px] w-full max-w-md shadow-2xl p-10 text-left animate-in fade-in zoom-in duration-200">
-                <h3 class="text-2xl font-black text-slate-900 mb-8 uppercase tracking-tight italic">Editar Lançamento</h3>
-                
-                <div class="space-y-6">
-                    <div v-if="formEditHist.type === 'contribution' || formEditHist.type === 'withdrawal'" class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Qtd Nova</label>
-                            <input v-model.number="formEditHist.quantity" type="number" step="0.00000001" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Preço Unitário</label>
-                            <input v-model.number="formEditHist.price" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
-                        </div>
-                    </div>
-                    
-                    <div v-else>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Valor Total (R$)</label>
-                        <input v-model.number="formEditHist.amount" type="number" step="0.01" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-black outline-none focus:border-blue-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Data</label>
-                        <input v-model="formEditHist.date" type="date" class="w-full border-2 border-slate-50 bg-slate-50/50 rounded-2xl p-4 font-bold outline-none focus:border-blue-500">
-                    </div>
-                </div>
-
-                <div class="flex gap-4 mt-10">
-                    <button @click="modalEditHist.aberto = false" class="flex-1 py-5 font-black text-slate-400 uppercase text-[10px] tracking-widest">Cancelar</button>
-                    <button @click="salvarEdicaoHistorico" class="flex-1 py-5 bg-blue-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">
-                        Salvar
-                    </button>
                 </div>
             </div>
         </div>
 
     </div>
 
+    <!-- SCRIPTS DA APLICAÇÃO -->
     <script>
-        const { createApp, ref, computed, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+        let graficoPizzaObj = null;
+        let graficoLinhaObj = null;
 
         createApp({
             setup() {
+                // --- VARIÁVEIS DE ESTADO ---
                 const ativos = ref([]);
+                const subcategories = ref([]);
+                const goals = ref([]);
+                
+                const modalNovoAtivo = ref({ aberto: false });
+                const formNovoAtivo = ref({ name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true });
+                const sugestoes = ref([]);
+                
+                // Base local de Tickers Inteligente para Autocomplete
+                const baseTickers = [
+                    { ticker: 'BTC', nome: 'Bitcoin', tipo: 'Cripto' }, 
+                    { ticker: 'ETH', nome: 'Ethereum', tipo: 'Cripto' },
+                    { ticker: 'USDT', nome: 'Tether', tipo: 'Cripto' }, 
+                    { ticker: 'PETR4', nome: 'Petrobras PN', tipo: 'Ações' },
+                    { ticker: 'VALE3', nome: 'Vale ON', tipo: 'Ações' }, 
+                    { ticker: 'ITUB4', nome: 'Itaú Unibanco PN', tipo: 'Ações' },
+                    { ticker: 'MXRF11', nome: 'Maxi Renda', tipo: 'FIIs' }, 
+                    { ticker: 'HGLG11', nome: 'CGHG Logística', tipo: 'FIIs' },
+                    { ticker: 'RZAG11', nome: 'Riza Fiagro', tipo: 'Fiagro' }, 
+                    { ticker: 'BDIF11', nome: 'BTG Infra', tipo: 'FI-Infra' },
+                    { ticker: 'BOVA11', nome: 'iShares Ibovespa', tipo: 'FIIs' }, 
+                    { ticker: 'IVVB11', nome: 'iShares S&P 500', tipo: 'FIIs' },
+                    { ticker: 'Tesouro Selic', nome: 'Pós-fixado LFT', tipo: 'Tesouro' }, 
+                    { ticker: 'Tesouro IPCA+', nome: 'Inflação NTN-B', tipo: 'Tesouro' }
+                ];
+
+                const modalOp = ref({ aberto: false, tipo: 'aporte' });
+                const formOp = ref({ asset_id: null, asset_name: '', quantity: 0, price: 0, date: '' });
+                
+                const modalSync = ref({ aberto: false, asset_id: null, asset_name: '', quantidade: 0, sugerido: 0, novoSaldo: 0, carregando: false, erro: '' });
+                const modalRendimento = ref({ aberto: false });
+                const formRendimento = ref({ asset_id: null, asset_name: '', amount: '', date: '' });
+                
+                const modalAtualizacaoManual = ref({ aberto: false });
+                const formAtualizacao = ref({ asset_id: null, asset_name: '', saldoAtual: 0, novoSaldo: '' });
+                
+                const modalExtrato = ref({ aberto: false, asset_id: null, asset_name: '' });
                 const historicoAtivo = ref([]);
-                
-                // Modais
-                const modalOp = ref({ aberto: false, ativo: null });
-                const modalSync = ref({ aberto: false, ativo: null, loading: false, isManual: false, sugerido: 0, novoSaldo: 0 });
-                const modalRendimento = ref({ aberto: false, ativo: null });
-                const modalExtrato = ref({ aberto: false, ativo: null });
-                const modalEditHist = ref({ aberto: false });
 
-                // Formulários
-                const formOp = ref({ tipo: 'aporte', asset_id: null, quantity: 0, price: 0, date: '' });
-                const formRendimento = ref({ asset_id: null, amount: 0, date: '' });
-                const formEditHist = ref({ id: null, type: '', quantity: 0, price: 0, amount: 0, date: '' });
+                const totalAplicado = computed(() => ativos.value.reduce((acc, curr) => acc + (curr.current_balance || 0), 0));
 
-                const totalAplicado = computed(() => ativos.value.reduce((acc, curr) => acc + curr.current_balance, 0));
-
+                // --- FUNÇÕES UTILITÁRIAS ---
                 const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-                const formatarData = (d) => { if(!d) return '--/--/--'; const p = d.split(' ')[0].split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
-
-                const getIcon = (n, s=18) => { 
+                const formatarData = (d) => d ? d.split('-').reverse().join('/') : '';
+                const getIcon = (name, size=18) => { 
                     try { 
-                        const name = n.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
-                        if (lucide && lucide.icons[name]) return lucide.icons[name].toSvg({width:s, height:s, 'stroke-width': 2.5}); 
-                        return "";
-                    } catch(e){return "";} 
+                        const n = name.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
+                        return lucide.icons[n].toSvg({width:size,height:size}); 
+                    } catch(e) { return ""; } 
                 };
 
-                const getIconByType = (t) => {
-                    const map = {
-                        'FIIs': 'building-2',
-                        'Cripto': 'bitcoin',
-                        'Ações': 'trending-up',
-                        'Tesouro Direto': 'crown',
-                        'Renda Fixa': 'landmark',
-                        'Fundos': 'briefcase',
-                        'Outros': 'pie-chart'
-                    };
-                    return map[t] || 'landmark';
-                };
+                // --- INTELIGÊNCIA DE GRÁFICOS (CHART.JS) ---
+                const renderGraficos = (historicoGlobal) => {
+                    // Gráfico 1: Pizza (Composição)
+                    const ctxPizza = document.getElementById('pieChart');
+                    if (ctxPizza) {
+                        if (graficoPizzaObj) graficoPizzaObj.destroy();
+                        const labelsPizza = ativos.value.map(a => a.name);
+                        const dataPizza = ativos.value.map(a => a.current_balance);
+                        const bgColors = ativos.value.map(a => a.color);
 
-                // ---- LÓGICA DE GRÁFICOS ----
-                let pieChartInstance = null;
-                let lineChartInstance = null;
-                
-                const initCharts = () => {
-                    if (pieChartInstance) pieChartInstance.destroy();
-                    if (lineChartInstance) lineChartInstance.destroy();
-
-                    const ctxPie = document.getElementById('chartPizzaAlocacao');
-                    if (ctxPie) {
-                        const ativosValidos = ativos.value.filter(a => a.current_balance > 0);
-                        const labelsPie = ativosValidos.map(a => a.name);
-                        const dataPie = ativosValidos.map(a => a.current_balance);
-                        const colorsPie = ativosValidos.map(a => a.color || '#3b82f6');
-
-                        pieChartInstance = new Chart(ctxPie, {
+                        graficoPizzaObj = new Chart(ctxPizza, {
                             type: 'doughnut',
-                            data: {
-                                labels: labelsPie,
-                                datasets: [{
-                                    data: dataPie,
-                                    backgroundColor: colorsPie,
-                                    borderWidth: 0,
-                                    hoverOffset: 15
-                                }]
+                            data: { 
+                                labels: labelsPizza.length ? labelsPizza : ['Carteira Vazia'], 
+                                datasets: [{ 
+                                    data: dataPizza.length ? dataPizza : [1], 
+                                    backgroundColor: bgColors.length ? bgColors : ['#cbd5e1'], 
+                                    borderWidth: 0, hoverOffset: 4 
+                                }] 
                             },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                cutout: '65%',
-                                plugins: {
-                                    legend: {
-                                        display: true,
-                                        position: 'right',
-                                        labels: { font: { family: 'Inter', weight: 'bold', size: 11 }, color: '#64748b', usePointStyle: true, padding: 20 }
-                                    },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: function(context) {
-                                                let label = context.label || '';
-                                                if (label) { label += ': '; }
-                                                if (context.parsed !== null) {
-                                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed);
-                                                }
-                                                return label;
-                                            }
-                                        }
-                                    }
-                                }
+                            options: { 
+                                responsive: true, maintainAspectRatio: false, cutout: '70%', 
+                                plugins: { 
+                                    legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true, font: { size: 11 } } }, 
+                                    tooltip: { callbacks: { label: function(context) { if (!dataPizza.length) return 'R$ 0,00'; return ' ' + formatarMoeda(context.parsed); } } } 
+                                } 
                             }
                         });
                     }
 
-                    const ctxLine = document.getElementById('chartEvolucaoAtivos');
-                    if (ctxLine) {
-                        const total = totalAplicado.value;
-                        const labelsLine = ['Out', 'Nov', 'Dez', 'Jan', 'Fev', 'Atual'];
-                        const dataLine = [total * 0.75, total * 0.82, total * 0.88, total * 0.93, total * 0.97, total];
+                    // Gráfico 2: Evolução de Aportes (Linha + Barras)
+                    const ctxLinha = document.getElementById('lineChart');
+                    if (ctxLinha) {
+                        if (graficoLinhaObj) graficoLinhaObj.destroy();
 
-                        lineChartInstance = new Chart(ctxLine, {
-                            type: 'line',
+                        const agrupadoporMes = {};
+                        historicoGlobal.forEach(h => {
+                            if (!h.date) return;
+                            const mesAno = h.date.substring(0, 7);
+                            if (!agrupadoporMes[mesAno]) agrupadoporMes[mesAno] = { aporteLíquido: 0 };
+                            if (h.type === 'contribution') agrupadoporMes[mesAno].aporteLíquido += h.amount;
+                            if (h.type === 'withdrawal') agrupadoporMes[mesAno].aporteLíquido -= h.amount;
+                        });
+
+                        const mesesOrdenados = Object.keys(agrupadoporMes).sort();
+                        const labelsMeses = []; 
+                        const aportesMensais = []; 
+                        const acumulado = [];
+                        let somaAcumulada = 0;
+                        const mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+                        mesesOrdenados.forEach(mesAno => {
+                            const [ano, mes] = mesAno.split('-');
+                            labelsMeses.push(`${mesesAbrev[parseInt(mes)-1]}/${ano.substring(2)}`);
+                            const valLiquido = agrupadoporMes[mesAno].aporteLíquido;
+                            aportesMensais.push(valLiquido);
+                            somaAcumulada += valLiquido;
+                            acumulado.push(somaAcumulada);
+                        });
+
+                        graficoLinhaObj = new Chart(ctxLinha, {
                             data: {
-                                labels: labelsLine,
-                                datasets: [{
-                                    label: 'Patrimônio Alocado',
-                                    data: dataLine,
-                                    borderColor: '#3b82f6',
-                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                    fill: true,
-                                    tension: 0.4,
-                                    borderWidth: 4,
-                                    pointRadius: 4,
-                                    pointBackgroundColor: '#3b82f6',
-                                    pointBorderColor: '#fff',
-                                    pointBorderWidth: 2
-                                }]
+                                labels: labelsMeses.length ? labelsMeses : ['Início'],
+                                datasets: [
+                                    { type: 'line', label: 'Evolução Patrimônio', data: acumulado.length ? acumulado : [0], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                                    { type: 'bar', label: 'Aporte Mês', data: aportesMensais.length ? aportesMensais : [0], backgroundColor: '#94a3b8', borderRadius: 4, yAxisID: 'y1' }
+                                ]
                             },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
+                            options: { 
+                                responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, 
+                                scales: { 
+                                    x: { grid: { display: false } }, 
+                                    y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + val.toLocaleString('pt-BR') } }, 
+                                    y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false } } 
+                                }, 
                                 plugins: { 
-                                    legend: { display: false },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: function(context) {
-                                                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    y: { beginAtZero: false, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, weight: 'bold' }, color: '#94a3b8' } },
-                                    x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' }, color: '#94a3b8' } }
-                                }
+                                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, font: {size: 11} } }, 
+                                    tooltip: { callbacks: { label: function(context) { let label = context.dataset.label || ''; if (label) { label += ': '; } if (context.parsed.y !== null) { label += formatarMoeda(context.parsed.y); } return label; } } } 
+                                } 
                             }
                         });
                     }
                 };
 
-                const carregarDados = async () => {
+                // --- CARREGAMENTO GLOBAL ---
+                const carregarDadosEGraficos = async () => {
                     try {
-                        const res = await fetch('http://localhost:3001/api/ativos');
-                        ativos.value = await res.json();
+                        const [resAtivos, resSub, resGoals] = await Promise.all([
+                            fetch('http://localhost:3001/api/ativos').then(r => r.json()),
+                            fetch('http://localhost:3001/api/parametros/subcategories').then(r => r.json()),
+                            fetch('http://localhost:3001/api/parametros/goals').then(r => r.json())
+                        ]);
                         
-                        setTimeout(() => { 
-                            initCharts();
-                            if(window.lucide) lucide.createIcons(); 
-                        }, 100);
+                        ativos.value = resAtivos; 
+                        subcategories.value = resSub; 
+                        goals.value = resGoals;
+
+                        const historyPromises = ativos.value.map(a => fetch(`http://localhost:3001/api/ativos/history/${a.id}`).then(r => r.json()));
+                        const allHistoriesArray = await Promise.all(historyPromises);
+                        const historicoGlobal = allHistoriesArray.flat();
+
+                        nextTick(() => { renderGraficos(historicoGlobal); });
                     } catch (e) { console.error(e); }
                 };
 
-                // NOVO: Função para excluir ativo inteiro a partir do card
-                const excluirAtivo = async (id) => {
-                    if(!confirm("Tem certeza que deseja remover este ativo da carteira? O seu histórico será apagado.")) return;
-                    try {
-                        // Utiliza a rota já existente no parametros.js
-                        await fetch(`http://localhost:3001/api/parametros/assets/${id}`, { method: 'DELETE' });
-                        carregarDados();
-                    } catch (e) { 
-                        console.error("Erro ao excluir ativo:", e); 
-                    }
+                // --- NOVO INVESTIMENTO E AUTOCOMPLETE ---
+                const abrirModalNovoAtivo = () => { 
+                    sugestoes.value = []; 
+                    formNovoAtivo.value = { name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true }; 
+                    modalNovoAtivo.value.aberto = true; 
                 };
-
-                // Funções de Operações
-                const prepararAporte = (ativo) => {
-                    formOp.value = { tipo: 'aporte', asset_id: ativo.id, quantity: 0, price: ativo.avg_price || 0, date: new Date().toISOString().split('T')[0] };
-                    modalOp.value.ativo = ativo;
-                    modalOp.value.aberto = true;
-                };
-
-                const prepararVenda = (ativo) => {
-                    formOp.value = { tipo: 'venda', asset_id: ativo.id, quantity: 0, price: (ativo.current_balance / (ativo.total_quantity || 1)), date: new Date().toISOString().split('T')[0] };
-                    modalOp.value.ativo = ativo;
-                    modalOp.value.aberto = true;
-                };
-
-                const confirmarOperacao = async () => {
-                    try {
-                        const endpoint = formOp.value.tipo === 'aporte' ? 'aporte' : 'venda';
-                        await fetch(`http://localhost:3001/api/ativos/${endpoint}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formOp.value) });
-                        modalOp.value.aberto = false;
-                        carregarDados();
-                    } catch (e) { console.error("Erro na operação:", e); }
-                };
-
-                // Sincronizador Automático/Manual
-                const sincronizar = async (ativo) => {
-                    const tiposAutomaticos = ['Ações', 'FIIs', 'Cripto'];
+                const fecharModalNovoAtivo = () => { modalNovoAtivo.value.aberto = false; };
+                
+                const buscarSugestoes = () => {
+                    if (!formNovoAtivo.value.name) { sugestoes.value = []; return; }
+                    const termo = formNovoAtivo.value.name.toUpperCase();
+                    let filtrados = baseTickers.filter(a => a.ticker.includes(termo) || a.nome.toUpperCase().includes(termo));
                     
-                    if (!tiposAutomaticos.includes(ativo.type)) {
-                        modalSync.value = { 
-                            aberto: true, 
-                            ativo: ativo, 
-                            loading: false, 
-                            isManual: true, 
-                            sugerido: 0, 
-                            novoSaldo: ativo.current_balance 
+                    if (termo.length >= 4 && termo.length <= 6 && !filtrados.find(f => f.ticker === termo)) {
+                        if (termo.endsWith('3') || termo.endsWith('4') || termo.endsWith('5') || termo.endsWith('6')) { 
+                            filtrados.push({ ticker: termo, nome: 'Ação (B3)', tipo: 'Ações' }); 
+                        } else if (termo.endsWith('11')) { 
+                            filtrados.push({ ticker: termo, nome: 'Fundo/BDR (B3)', tipo: 'FIIs' }); 
+                        }
+                    }
+                    sugestoes.value = filtrados.slice(0, 6);
+                };
+                
+                const fecharSugestoesComAtraso = () => { setTimeout(() => { sugestoes.value = []; }, 200); };
+                
+                const selecionarTicker = (sugestao) => { 
+                    formNovoAtivo.value.name = sugestao.ticker; 
+                    formNovoAtivo.value.type = sugestao.tipo; 
+                    const coresPadrao = { 'Cripto': '#f59e0b', 'Ações': '#3b82f6', 'FIIs': '#6366f1', 'Fiagro': '#8b5cf6', 'FI-Infra': '#0ea5e9', 'Tesouro': '#10b981' }; 
+                    formNovoAtivo.value.color = coresPadrao[sugestao.tipo] || '#cbd5e1'; 
+                    sugestoes.value = []; 
+                };
+                
+                const getTypeColor = (tipo) => { 
+                    const map = { 'Cripto': 'bg-amber-100 text-amber-700', 'Ações': 'bg-blue-100 text-blue-700', 'FIIs': 'bg-indigo-100 text-indigo-700', 'Fiagro': 'bg-purple-100 text-purple-700', 'FI-Infra': 'bg-sky-100 text-sky-700', 'Tesouro': 'bg-emerald-100 text-emerald-700' }; 
+                    return map[tipo] || 'bg-slate-100 text-slate-700'; 
+                };
+
+                const salvarNovoAtivo = async () => {
+                    if (!formNovoAtivo.value.name.trim()) return alert("Digite um nome ou Ticker válido.");
+                    try {
+                        const payload = {
+                            ...formNovoAtivo.value, 
+                            subcategory_id: formNovoAtivo.value.subcategory_id || null, 
+                            goal_id: formNovoAtivo.value.goal_id || null
                         };
-                        return;
-                    }
-
-                    modalSync.value = { aberto: true, ativo: ativo, loading: true, isManual: false, sugerido: 0, novoSaldo: 0 };
-                    try {
-                        const res = await fetch(`http://localhost:3001/api/ativos/sync`, { 
-                            method: 'POST', 
-                            headers: {'Content-Type': 'application/json'}, 
-                            body: JSON.stringify({ asset_id: ativo.id, confirmar: false }) 
+                        // CORREÇÃO: Apontando para o endpoint /api/ativos
+                        const res = await fetch('http://localhost:3001/api/ativos', { 
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) 
                         });
-                        
-                        const text = await res.text();
-                        let data;
-                        
-                        try {
-                            data = JSON.parse(text);
-                        } catch (parseErr) {
-                            throw new Error("O servidor retornou uma resposta inválida. Verifique o console.");
-                        }
-
-                        if (!res.ok) {
-                            throw new Error(data.error || 'Erro desconhecido na API.');
-                        }
-                        
-                        modalSync.value.sugerido = data.sugerido;
-                        modalSync.value.novoSaldo = data.novoSaldo;
-                        
-                    } catch (e) {
-                        alert(e.message || "Falha de conexão com o servidor MyEquity.");
-                        modalSync.value.aberto = false;
-                    } finally {
-                        modalSync.value.loading = false;
-                    }
+                        if (res.ok) { 
+                            modalNovoAtivo.value.aberto = false; 
+                            carregarDadosEGraficos(); 
+                        } else { alert("Erro ao criar ativo."); }
+                    } catch (e) { console.error(e); }
                 };
 
-                const confirmarSync = async () => {
+                const excluirAtivo = async (id) => {
+                    if (!confirm("ATENÇÃO: Tem certeza que deseja excluir permanentemente este investimento e todo o seu histórico?")) return;
+                    try { 
+                        await fetch(`http://localhost:3001/api/ativos/${id}`, { method: 'DELETE' }); 
+                        carregarDadosEGraficos(); 
+                    } catch (e) { console.error(e); }
+                };
+
+                // --- APORTES E VENDAS ---
+                const prepararAporte = (asset) => { 
+                    formOp.value = { asset_id: asset.id, asset_name: asset.name, quantity: '', price: '', date: new Date().toISOString().split('T')[0] }; 
+                    modalOp.value = { aberto: true, tipo: 'aporte' }; 
+                };
+                
+                const prepararVenda = (asset) => { 
+                    formOp.value = { asset_id: asset.id, asset_name: asset.name, quantity: '', price: '', date: new Date().toISOString().split('T')[0] }; 
+                    modalOp.value = { aberto: true, tipo: 'venda' }; 
+                };
+                
+                const confirmarOperacao = async () => {
+                    const endpoint = modalOp.value.tipo === 'aporte' ? '/aporte' : '/venda';
                     try {
-                        await fetch(`http://localhost:3001/api/ativos/sync`, { 
-                            method: 'POST', 
-                            headers: {'Content-Type': 'application/json'}, 
-                            body: JSON.stringify({ 
-                                asset_id: modalSync.value.ativo.id, 
-                                confirmar: true, 
-                                novoSaldo: modalSync.value.novoSaldo 
-                            }) 
+                        const res = await fetch(`http://localhost:3001/api/ativos${endpoint}`, { 
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formOp.value) 
                         });
-                        modalSync.value.aberto = false;
-                        carregarDados();
-                    } catch (e) {
-                        alert("Erro ao aplicar a atualização.");
-                    }
+                        const data = await res.json();
+                        if (data.error) { 
+                            alert(data.error); 
+                        } else {
+                            if(modalOp.value.tipo === 'venda' && data.imposto_gerado > 0) {
+                                alert(`VENDA COM LUCRO!\nProvisão de IR: ${formatarMoeda(data.imposto_gerado)}\nEmita o DARF!`);
+                            }
+                            modalOp.value.aberto = false; 
+                            carregarDadosEGraficos();
+                        }
+                    } catch (e) { console.error(e); }
                 };
 
-                // Funções de Proventos
-                const prepararRendimento = (ativo) => {
-                    formRendimento.value = { asset_id: ativo.id, amount: 0, date: new Date().toISOString().split('T')[0] };
-                    modalRendimento.value.ativo = ativo;
-                    modalRendimento.value.aberto = true;
+                // --- RENDIMENTOS ---
+                const prepararRendimento = (asset) => { 
+                    formRendimento.value = { asset_id: asset.id, asset_name: asset.name, amount: '', date: new Date().toISOString().split('T')[0] }; 
+                    modalRendimento.value.aberto = true; 
                 };
-
+                
                 const confirmarRendimento = async () => {
                     try {
-                        await fetch(`http://localhost:3001/api/ativos/rendimentos`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formRendimento.value) });
-                        modalRendimento.value.aberto = false;
-                        carregarDados();
-                    } catch (e) { console.error("Erro nos rendimentos:", e); }
-                };
-
-                // Funções do Extrato / Histórico
-                const abrirExtrato = async (ativo) => {
-                    modalExtrato.value = { aberto: true, ativo };
-                    try {
-                        const res = await fetch(`http://localhost:3001/api/ativos/history/${ativo.id}`);
-                        historicoAtivo.value = await res.json();
-                        setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 100);
-                    } catch (e) { console.error("Erro ao carregar extrato:", e); }
-                };
-
-                const editarHistorico = (hist) => {
-                    formEditHist.value = { 
-                        ...hist, 
-                        price: hist.quantity > 0 ? (hist.amount / hist.quantity) : 0,
-                        date: hist.date.split(' ')[0] 
-                    };
-                    modalEditHist.value.aberto = true;
-                };
-
-                const salvarEdicaoHistorico = async () => {
-                    let amount = formEditHist.value.amount;
-                    if (formEditHist.value.type === 'contribution' || formEditHist.value.type === 'withdrawal') {
-                        amount = formEditHist.value.quantity * formEditHist.value.price;
-                    }
-                    try {
-                        await fetch(`http://localhost:3001/api/ativos/history/${formEditHist.value.id}`, { 
-                            method: 'PUT', 
-                            headers: {'Content-Type': 'application/json'}, 
-                            body: JSON.stringify({ amount, quantity: formEditHist.value.quantity, date: formEditHist.value.date }) 
+                        const res = await fetch(`http://localhost:3001/api/ativos/rendimento`, { 
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formRendimento.value) 
                         });
-                        modalEditHist.value.aberto = false; 
-                        abrirExtrato(modalExtrato.value.ativo); 
-                        carregarDados();
-                    } catch (e) { console.error("Erro ao salvar histórico:", e); }
+                        if (!res.ok) throw new Error("Falha no servidor."); 
+                        const data = await res.json();
+                        if (data.error) alert(data.error); else { modalRendimento.value.aberto = false; carregarDadosEGraficos(); }
+                    } catch (e) { console.error(e); }
                 };
 
-                const excluirHistorico = async (id) => { 
-                    if(!confirm("Eliminar este lançamento do histórico?")) return; 
+                // --- SINCRONIZAÇÃO MERCADO (BRAPI) ---
+                const prepararSync = async (asset) => {
+                    modalSync.value = { aberto: true, asset_id: asset.id, asset_name: asset.name, quantidade: asset.total_quantity, sugerido: 0, novoSaldo: 0, carregando: true, erro: '' };
                     try {
-                        await fetch(`http://localhost:3001/api/ativos/history/${id}`, { method: 'DELETE' }); 
-                        abrirExtrato(modalExtrato.value.ativo); 
-                        carregarDados(); 
-                    } catch (e) { console.error("Erro ao excluir histórico:", e); }
+                        const res = await fetch(`http://localhost:3001/api/ativos/sync/${asset.id}`, { method: 'POST' }); 
+                        const data = await res.json();
+                        if (!res.ok || data.error) throw new Error(data.error || "Falha ao buscar cotação.");
+                        modalSync.value.sugerido = data.sugerido; 
+                        modalSync.value.novoSaldo = data.novoSaldo; 
+                        modalSync.value.carregando = false;
+                    } catch (e) { 
+                        modalSync.value.carregando = false; 
+                        modalSync.value.erro = e.message; 
+                    }
+                };
+                
+                const confirmarSync = async () => { 
+                    try { 
+                        await fetch(`http://localhost:3001/api/ativos/aplicar-sync/${modalSync.value.asset_id}`, { 
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ novo_saldo: modalSync.value.novoSaldo }) 
+                        }); 
+                        modalSync.value.aberto = false; 
+                        carregarDadosEGraficos(); 
+                    } catch (e) { console.error(e); } 
                 };
 
-                const traduzirTipo = (t) => ({ 'contribution': 'Aporte', 'withdrawal': 'Venda', 'dividend': 'Provento', 'market_update': 'Valorização' }[t] || t);
-                const getHistColor = (t) => ({ 'contribution': 'bg-emerald-50 text-emerald-600', 'withdrawal': 'bg-rose-50 text-rose-600', 'dividend': 'bg-blue-50 text-blue-600', 'market_update': 'bg-slate-50 text-slate-400' }[t] || '');
+                // --- ATUALIZAÇÃO MANUAL (RENDA FIXA) ---
+                const prepararAtualizacaoManual = (asset) => { 
+                    formAtualizacao.value = { asset_id: asset.id, asset_name: asset.name, saldoAtual: asset.current_balance, novoSaldo: '' }; 
+                    modalAtualizacaoManual.value.aberto = true; 
+                };
+                
+                const confirmarAtualizacaoManual = async () => { 
+                    try { 
+                        await fetch(`http://localhost:3001/api/ativos/aplicar-sync/${formAtualizacao.value.asset_id}`, { 
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ novo_saldo: parseFloat(formAtualizacao.value.novoSaldo) }) 
+                        }); 
+                        modalAtualizacaoManual.value.aberto = false; 
+                        carregarDadosEGraficos(); 
+                    } catch (e) { console.error(e); } 
+                };
 
-                onMounted(carregarDados);
+                // --- EXTRATO E HISTÓRICO ---
+                const abrirExtrato = async (asset) => { 
+                    try { 
+                        const res = await fetch(`http://localhost:3001/api/ativos/history/${asset.id}`); 
+                        historicoAtivo.value = await res.json(); 
+                        modalExtrato.value = { aberto: true, asset_id: asset.id, asset_name: asset.name }; 
+                    } catch (e) { console.error(e); } 
+                };
+                
+                const fecharModalExtrato = () => { modalExtrato.value.aberto = false; };
+
+                // Funções Auxiliares do Extrato
+                const isSyncLegacy = (t) => ['market_update', 'sync', 'Valorização', 'Atualização'].includes(t);
+                const traduzirTipo = (t) => { 
+                    if (isSyncLegacy(t)) return 'Sincronização'; 
+                    return { 'contribution': 'Aporte', 'withdrawal': 'Venda', 'dividend': 'Provento' }[t] || t; 
+                };
+                const getHistColor = (t) => { 
+                    if (isSyncLegacy(t)) return 'bg-blue-100 text-blue-600'; 
+                    return { 'contribution': 'bg-emerald-100 text-emerald-600', 'withdrawal': 'bg-rose-100 text-rose-600', 'dividend': 'bg-purple-100 text-purple-600' }[t] || 'bg-slate-100 text-slate-500'; 
+                };
+                const getIconByType = (t) => { 
+                    if (isSyncLegacy(t)) return getIcon('refresh-cw', 20); 
+                    const map = { 'contribution': 'arrow-down-circle', 'withdrawal': 'arrow-up-circle', 'dividend': 'dollar-sign' }; 
+                    return getIcon(map[t] || 'circle', 20); 
+                };
+
+                // START
+                onMounted(() => { 
+                    carregarDadosEGraficos(); 
+                    setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150); 
+                });
 
                 return { 
-                    ativos, totalAplicado, modalOp, modalSync, modalRendimento, modalExtrato, modalEditHist, 
-                    formOp, formRendimento, formEditHist, historicoAtivo, formatarMoeda, formatarData, getIcon, getIconByType, 
-                    carregarDados, excluirAtivo, prepararAporte, prepararVenda, confirmarOperacao, sincronizar, confirmarSync, 
-                    prepararRendimento, confirmarRendimento, abrirExtrato, editarHistorico, salvarEdicaoHistorico, excluirHistorico,
-                    traduzirTipo, getHistColor 
+                    ativos, totalAplicado, subcategories, goals,
+                    modalNovoAtivo, formNovoAtivo, abrirModalNovoAtivo, fecharModalNovoAtivo, salvarNovoAtivo,
+                    sugestoes, buscarSugestoes, fecharSugestoesComAtraso, selecionarTicker, getTypeColor,
+                    modalOp, modalSync, modalExtrato, modalRendimento, modalAtualizacaoManual, formOp, formRendimento, formAtualizacao,
+                    formatarMoeda, formatarData, getIcon, carregarDadosEGraficos, excluirAtivo, fecharModalExtrato,
+                    prepararAporte, prepararVenda, confirmarOperacao, prepararRendimento, confirmarRendimento,
+                    prepararSync, confirmarSync, prepararAtualizacaoManual, confirmarAtualizacaoManual,
+                    abrirExtrato, traduzirTipo, getHistColor, getIconByType, isSyncLegacy
                 };
             }
         }).mount('#app');
