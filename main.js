@@ -20,7 +20,7 @@ function createWindow() {
     });
 
     // Abre o console de desenvolvedor automaticamente para depuração
-    //mainWindow.webContents.openDevTools(); 
+    mainWindow.webContents.openDevTools(); 
 
     // Remove o menu padrão para uma aparência mais limpa
     mainWindow.setMenuBarVisibility(false);

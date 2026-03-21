@@ -816,6 +816,7 @@
                     setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150); 
                 });
 
+                // (FINAL DO ARQUIVO investimentos.html)
                 return { 
                     ativos, totalAplicado, subcategories, goals,
                     modalNovoAtivo, formNovoAtivo, abrirModalNovoAtivo, fecharModalNovoAtivo, salvarNovoAtivo,
@@ -824,7 +825,8 @@
                     formatarMoeda, formatarData, getIcon, carregarDadosEGraficos, excluirAtivo, fecharModalExtrato,
                     prepararAporte, prepararVenda, confirmarOperacao, prepararRendimento, confirmarRendimento,
                     prepararSync, confirmarSync, prepararAtualizacaoManual, confirmarAtualizacaoManual,
-                    abrirExtrato, traduzirTipo, getHistColor, getIconByType, isSyncLegacy
+                    abrirExtrato, traduzirTipo, getHistColor, getIconByType, isSyncLegacy,
+                    historicoAtivo // <-- BASTA ADICIONAR ESTA VARIÁVEL AQUI
                 };
             }
         }).mount('#app');

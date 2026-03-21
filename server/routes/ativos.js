@@ -187,8 +187,14 @@ router.post('/sync/:id', async (req, res) => {
 router.post('/aplicar-sync/:id', (req, res) => {
     const { novo_saldo } = req.body;
     try {
-        if (novo_saldo === undefined || novo_saldo === null) return res.status(400).json({ error: "Valor do novo saldo não fornecido." });
-        db.prepare("UPDATE Assets SET current_balance = ?, last_sync = CURRENT_TIMESTAMP WHERE id = ?").run(novo_saldo, req.params.id);
+        if (novo_saldo === undefined || novo_saldo === null) {
+            return res.status(400).json({ error: "Valor do novo saldo não fornecido." });
+        }
+
+        // CORREÇÃO AQUI: Removido o 'last_sync = CURRENT_TIMESTAMP' 
+        // pois essa coluna não faz parte da estrutura da V2
+        db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, req.params.id);
+        
         res.json({ success: true });
     } catch (err) { 
         res.status(500).json({ error: err.message }); 
