@@ -19,7 +19,6 @@ router.get('/', (req, res) => {
             ORDER BY A.status, A.name
         `).all();
         
-        // Enriquecer com Preço Médio e Quantidade Total
         const enriched = assets.map(asset => {
             const history = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset.id);
             let totalQty = 0;
@@ -49,10 +48,9 @@ router.get('/', (req, res) => {
 });
 
 // ============================================================================
-// 2. CRIAÇÃO DE NOVO ATIVO (CORRIGIDO PARA V2 - BUCKETING E SETORES)
+// 2. CRIAÇÃO DE NOVO ATIVO
 // ============================================================================
 router.post('/', (req, res) => {
-    // Agora o backend aceita e processa todos os campos enviados pelo HTML
     const { name, type, color, subcategory_id, goal_id, is_rebalancing_active } = req.body;
     try {
         db.prepare(`
@@ -73,7 +71,7 @@ router.post('/', (req, res) => {
 });
 
 // ============================================================================
-// 3. OPERAÇÕES: APORTE E VENDA (COM MOTOR FISCAL DE IR)
+// 3. OPERAÇÕES: APORTE E VENDA
 // ============================================================================
 router.post('/aporte', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
@@ -109,7 +107,6 @@ router.post('/venda', (req, res) => {
         const lucroBrutoOperacao = (price - avgPrice) * quantity;
         let taxDue = 0;
 
-        // MOTOR FISCAL: Calcula o IR devido com base na classe do ativo
         if (lucroBrutoOperacao > 0) {
             const tipo = asset.type.toUpperCase();
             if (tipo.includes('AÇÃO') || tipo.includes('ACOES') || tipo.includes('BDR')) taxDue = lucroBrutoOperacao * 0.15; 
@@ -133,7 +130,7 @@ router.post('/rendimento', (req, res) => {
 });
 
 // ============================================================================
-// 4. SINCRONIZAÇÃO DE COTAÇÕES E HISTÓRICO
+// 4. SINCRONIZAÇÃO E ATUALIZAÇÃO MANUAL
 // ============================================================================
 router.post('/sync/:id', async (req, res) => {
     try {
@@ -187,20 +184,17 @@ router.post('/sync/:id', async (req, res) => {
 router.post('/aplicar-sync/:id', (req, res) => {
     const { novo_saldo } = req.body;
     try {
-        if (novo_saldo === undefined || novo_saldo === null) {
-            return res.status(400).json({ error: "Valor do novo saldo não fornecido." });
-        }
-
-        // CORREÇÃO AQUI: Removido o 'last_sync = CURRENT_TIMESTAMP' 
-        // pois essa coluna não faz parte da estrutura da V2
+        if (novo_saldo === undefined || novo_saldo === null) return res.status(400).json({ error: "Valor do novo saldo não fornecido." });
         db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, req.params.id);
-        
         res.json({ success: true });
     } catch (err) { 
         res.status(500).json({ error: err.message }); 
     }
 });
 
+// ============================================================================
+// 5. GESTÃO DE HISTÓRICO (EXTRATO)
+// ============================================================================
 router.get('/history/:id', (req, res) => {
     try {
         const rows = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date DESC, id DESC").all(req.params.id);
@@ -215,11 +209,28 @@ router.delete('/:id', (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// CORREÇÃO: Ao excluir do histórico, o saldo financeiro do ativo é ajustado!
 router.delete('/history/:id', (req, res) => {
     try {
+        const historyItem = db.prepare("SELECT * FROM EquityHistory WHERE id = ?").get(req.params.id);
+        
+        if (!historyItem) {
+            return res.status(404).json({ error: "Registro não encontrado." });
+        }
+
+        // Se for um aporte, subtraímos do saldo atual. Se for venda, devolvemos ao saldo.
+        if (historyItem.type === 'contribution') {
+            db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(historyItem.amount, historyItem.asset_id);
+        } else if (historyItem.type === 'withdrawal') {
+            db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(historyItem.amount, historyItem.asset_id);
+        }
+
+        // Após ajustar o saldo, excluímos a linha do extrato
         db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 module.exports = router;

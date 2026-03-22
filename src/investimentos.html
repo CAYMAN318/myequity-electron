@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyEquity - Gestão de Ativos V2</title>
     
-    <!-- Bibliotecas Locais -->
     <script src="libs/tailwindcss.js"></script>
     <script src="libs/vue.global.js"></script>
     <script src="libs/lucide.js"></script>
@@ -58,8 +57,6 @@
             background: #cbd5e1; 
             border-radius: 10px; 
         }
-        
-        /* Animação do Dropdown Autocomplete */
         .search-results { 
             animation: slideDown 0.2s ease-out forwards; 
             transform-origin: top; 
@@ -76,7 +73,6 @@
 
     <div id="app" class="max-w-7xl mx-auto space-y-6">
         
-        <!-- CABEÇALHO -->
         <div class="flex justify-between items-end mb-8">
             <div>
                 <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Carteira de Ativos</h1>
@@ -93,18 +89,14 @@
             </div>
         </div>
 
-        <!-- GRID DE ATIVOS -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             <div v-for="asset in ativos" :key="asset.id" class="asset-card p-6">
-                
-                <!-- PARTE SUPERIOR DO CARTÃO -->
                 <div>
                     <div class="flex justify-between items-start mb-4">
                         <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-sm" :style="{ backgroundColor: asset.color }">
                             {{ asset.name.charAt(0) }}
                         </div>
                         <div class="flex gap-2">
-                            <!-- BOTÃO EXCLUIR REFINADO (Sólido com Borda) -->
                             <button @click="excluirAtivo(asset.id)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-rose-300 hover:text-rose-600 shadow-sm transition-all" title="Excluir Investimento">
                                 <span class="icon-wrapper" v-html="getIcon('trash', 18)"></span>
                             </button>
@@ -114,7 +106,6 @@
                     <h2 class="text-xl font-bold text-slate-800 tracking-tight">{{ asset.name }}</h2>
                     <p class="text-sm text-slate-500 mb-3">{{ asset.type }}</p>
 
-                    <!-- BADGES (Etiquetas de Classificação) -->
                     <div class="flex flex-wrap mb-4">
                         <span v-if="asset.goal_name" class="badge bg-indigo-50 text-indigo-700 border border-indigo-100">
                             <span class="icon-wrapper mr-1" v-html="getIcon('target', 10)"></span> {{ asset.goal_name }}
@@ -127,7 +118,6 @@
                         </span>
                     </div>
 
-                    <!-- CAIXA DE MÉTRICAS -->
                     <div class="bg-slate-50 rounded-xl p-4 mt-2 border border-slate-100">
                         <div class="flex justify-between mb-2">
                             <span class="text-xs font-medium text-slate-500">Saldo Projetado</span>
@@ -144,7 +134,6 @@
                     </div>
                 </div>
 
-                <!-- PARTE INFERIOR DO CARTÃO (Ações) -->
                 <div class="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
                     <div class="grid grid-cols-2 gap-2">
                         <button @click="prepararAporte(asset)" class="py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium text-sm rounded-xl transition-colors flex justify-center items-center gap-1">
@@ -164,7 +153,6 @@
                         </button>
                     </div>
 
-                    <!-- BOTÃO INTELIGENTE DE ATUALIZAÇÃO -->
                     <button v-if="['Ações', 'FIIs', 'BDRs', 'Fiagro', 'FI-Infra', 'Cripto', 'Exterior'].includes(asset.type)" @click="prepararSync(asset)" class="w-full py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-blue-100 mt-1">
                         <span class="icon-wrapper" v-html="getIcon('refresh-cw', 14)"></span> Sincronizar Cotação
                     </button>
@@ -175,18 +163,26 @@
             </div>
         </div>
 
-        <!-- SESSÃO DE GRÁFICOS -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-            <!-- Gráfico de Linha (Fluxo de Caixa) -->
+            
             <div class="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">Evolução dos Aportes (Fluxo de Caixa)</h3>
-                <p class="text-xs text-slate-500 mb-6">Acompanhe o tamanho dos seus aportes mensais (barras) frente ao crescimento acumulado (linha).</p>
+                
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Evolução dos Aportes</h3>
+                        <p class="text-xs text-slate-500">Acompanhe o tamanho dos seus aportes mensais (barras) frente ao crescimento (linha).</p>
+                    </div>
+                    <select v-model="filtroGrafico" @change="renderGraficos" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 py-2 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer shadow-sm">
+                        <option value="todos">Visão Geral (Todos)</option>
+                        <option v-for="a in ativos" :key="a.id" :value="a.id">{{ a.name }}</option>
+                    </select>
+                </div>
+
                 <div class="relative h-64 w-full">
                     <canvas id="lineChart"></canvas>
                 </div>
             </div>
             
-            <!-- Gráfico de Pizza (Composição) -->
             <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
                 <h3 class="text-lg font-bold text-slate-800 mb-2">Composição Atual</h3>
                 <p class="text-xs text-slate-500 mb-6">Distribuição patrimonial entre os ativos da carteira.</p>
@@ -196,11 +192,6 @@
             </div>
         </div>
 
-        <!-- ========================================================================= -->
-        <!-- MODAIS DO SISTEMA                                                         -->
-        <!-- ========================================================================= -->
-
-        <!-- MODAL: NOVO ATIVO -->
         <div v-if="modalNovoAtivo.aberto" @click.self="fecharModalNovoAtivo" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
                 <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-600 text-white rounded-t-3xl">
@@ -214,12 +205,10 @@
                 </div>
                 
                 <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar max-h-[70vh]">
-                    <!-- Autocomplete -->
                     <div class="relative">
                         <label class="block text-xs font-bold text-slate-700 mb-1">Nome ou Ticker</label>
                         <input v-model="formNovoAtivo.name" @input="buscarSugestoes" @focus="buscarSugestoes" @blur="fecharSugestoesComAtraso" type="text" autocomplete="off" placeholder="Ex: PETR4, Bitcoin..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                         
-                        <!-- Lista Suspensa de Sugestões -->
                         <div v-if="sugestoes.length > 0" class="search-results absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl custom-scrollbar">
                             <div v-for="sugestao in sugestoes" @click="selecionarTicker(sugestao)" class="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0 transition-colors">
                                 <div>
@@ -259,7 +248,6 @@
                     
                     <hr class="border-slate-100">
                     
-                    <!-- Configurações V2.0 (Bucketing e Setores) -->
                     <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-500 mb-1">Setor / Subcategoria</label>
@@ -292,7 +280,6 @@
             </div>
         </div>
 
-        <!-- MODAL: APORTE E VENDA -->
         <div v-if="modalOp.aberto" @click.self="modalOp.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100" :class="modalOp.tipo === 'aporte' ? 'bg-emerald-50' : 'bg-rose-50'">
@@ -329,7 +316,6 @@
             </div>
         </div>
 
-        <!-- MODAL: RENDIMENTO (PROVENTO) -->
         <div v-if="modalRendimento.aberto" @click.self="modalRendimento.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-purple-50">
@@ -355,7 +341,6 @@
             </div>
         </div>
 
-        <!-- MODAL: SINCRONIZAÇÃO AUTOMÁTICA -->
         <div v-if="modalSync.aberto" @click.self="modalSync.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-blue-50">
@@ -391,7 +376,6 @@
             </div>
         </div>
 
-        <!-- MODAL: ATUALIZAÇÃO MANUAL -->
         <div v-if="modalAtualizacaoManual.aberto" @click.self="modalAtualizacaoManual.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-teal-50">
@@ -417,7 +401,6 @@
             </div>
         </div>
 
-        <!-- MODAL: EXTRATO (Histórico de Movimentações) -->
         <div v-if="modalExtrato.aberto" @click.self="fecharModalExtrato" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -441,7 +424,7 @@
 
                     <div v-for="h in historicoAtivo" :key="h.id" class="bg-white p-4 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm">
                         <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center" :class="getHistColor(h.type)">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0" :class="getHistColor(h.type)">
                                 <span class="icon-wrapper" v-html="getIconByType(h.type)"></span>
                             </div>
                             <div>
@@ -449,11 +432,21 @@
                                 <p class="text-xs text-slate-500">{{ formatarData(h.date) }}</p>
                             </div>
                         </div>
-                        <div class="text-right">
+                        
+                        <div class="text-right flex flex-col items-end">
                             <p class="text-sm font-bold" :class="h.type === 'withdrawal' ? 'text-rose-600' : (isSyncLegacy(h.type) ? 'text-blue-600' : (h.type === 'dividend' ? 'text-purple-600' : 'text-emerald-600'))">
                                 {{ h.type === 'withdrawal' ? '-' : (isSyncLegacy(h.type) ? '' : '+') }}{{ formatarMoeda(h.amount) }}
                             </p>
                             <p v-if="h.quantity > 0" class="text-xs text-slate-500">{{ h.quantity }} cotas</p>
+                            
+                            <div class="flex gap-1 mt-2">
+                                <button @click="editarHistorico(h)" class="p-1.5 bg-white border border-slate-200 rounded-lg hover:border-blue-300 hover:text-blue-600 text-slate-400 transition-colors" title="Editar Lançamento">
+                                    <span class="icon-wrapper" v-html="getIcon('edit', 14)"></span>
+                                </button>
+                                <button @click="excluirHistorico(h)" class="p-1.5 bg-white border border-slate-200 rounded-lg hover:border-rose-300 hover:text-rose-600 text-slate-400 transition-colors" title="Excluir Lançamento">
+                                    <span class="icon-wrapper" v-html="getIcon('trash', 14)"></span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -463,7 +456,6 @@
 
     </div>
 
-    <!-- SCRIPTS DA APLICAÇÃO -->
     <script>
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
@@ -477,11 +469,14 @@
                 const subcategories = ref([]);
                 const goals = ref([]);
                 
+                // Variáveis para o Filtro de Gráfico
+                const filtroGrafico = ref('todos');
+                const historicoGlobalCompleto = ref([]);
+                
                 const modalNovoAtivo = ref({ aberto: false });
                 const formNovoAtivo = ref({ name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true });
                 const sugestoes = ref([]);
                 
-                // Base local de Tickers Inteligente para Autocomplete
                 const baseTickers = [
                     { ticker: 'BTC', nome: 'Bitcoin', tipo: 'Cripto' }, 
                     { ticker: 'ETH', nome: 'Ethereum', tipo: 'Cripto' },
@@ -525,8 +520,8 @@
                 };
 
                 // --- INTELIGÊNCIA DE GRÁFICOS (CHART.JS) ---
-                const renderGraficos = (historicoGlobal) => {
-                    // Gráfico 1: Pizza (Composição)
+                const renderGraficos = () => {
+                    // 1. Gráfico de Pizza (Não sofre ação do filtro de dropdown)
                     const ctxPizza = document.getElementById('pieChart');
                     if (ctxPizza) {
                         if (graficoPizzaObj) graficoPizzaObj.destroy();
@@ -554,13 +549,20 @@
                         });
                     }
 
-                    // Gráfico 2: Evolução de Aportes (Linha + Barras)
+                    // 2. Gráfico de Linha (Aplica o Filtro Selecionado)
                     const ctxLinha = document.getElementById('lineChart');
                     if (ctxLinha) {
                         if (graficoLinhaObj) graficoLinhaObj.destroy();
 
+                        let historyToChart = historicoGlobalCompleto.value;
+                        
+                        // Aplica o filtro se não for "todos"
+                        if (filtroGrafico.value !== 'todos') {
+                            historyToChart = historyToChart.filter(h => h.asset_id === filtroGrafico.value);
+                        }
+
                         const agrupadoporMes = {};
-                        historicoGlobal.forEach(h => {
+                        historyToChart.forEach(h => {
                             if (!h.date) return;
                             const mesAno = h.date.substring(0, 7);
                             if (!agrupadoporMes[mesAno]) agrupadoporMes[mesAno] = { aporteLíquido: 0 };
@@ -588,7 +590,7 @@
                             data: {
                                 labels: labelsMeses.length ? labelsMeses : ['Início'],
                                 datasets: [
-                                    { type: 'line', label: 'Evolução Patrimônio', data: acumulado.length ? acumulado : [0], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                                    { type: 'line', label: filtroGrafico.value === 'todos' ? 'Evolução Global' : 'Evolução do Ativo', data: acumulado.length ? acumulado : [0], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
                                     { type: 'bar', label: 'Aporte Mês', data: aportesMensais.length ? aportesMensais : [0], backgroundColor: '#94a3b8', borderRadius: 4, yAxisID: 'y1' }
                                 ]
                             },
@@ -623,9 +625,11 @@
 
                         const historyPromises = ativos.value.map(a => fetch(`http://localhost:3001/api/ativos/history/${a.id}`).then(r => r.json()));
                         const allHistoriesArray = await Promise.all(historyPromises);
-                        const historicoGlobal = allHistoriesArray.flat();
+                        
+                        // Guarda o histórico na memória para o filtro usar depois
+                        historicoGlobalCompleto.value = allHistoriesArray.flat();
 
-                        nextTick(() => { renderGraficos(historicoGlobal); });
+                        nextTick(() => { renderGraficos(); });
                     } catch (e) { console.error(e); }
                 };
 
@@ -675,7 +679,6 @@
                             subcategory_id: formNovoAtivo.value.subcategory_id || null, 
                             goal_id: formNovoAtivo.value.goal_id || null
                         };
-                        // CORREÇÃO: Apontando para o endpoint /api/ativos
                         const res = await fetch('http://localhost:3001/api/ativos', { 
                             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) 
                         });
@@ -783,7 +786,7 @@
                     } catch (e) { console.error(e); } 
                 };
 
-                // --- EXTRATO E HISTÓRICO ---
+                // --- EXTRATO, EDIÇÃO E HISTÓRICO ---
                 const abrirExtrato = async (asset) => { 
                     try { 
                         const res = await fetch(`http://localhost:3001/api/ativos/history/${asset.id}`); 
@@ -793,6 +796,28 @@
                 };
                 
                 const fecharModalExtrato = () => { modalExtrato.value.aberto = false; };
+
+                // Funções de Integridade do Extrato (Editar e Excluir)
+                const editarHistorico = (h) => {
+                    alert("⚠️ INTEGRIDADE FISCAL:\n\nA edição direta de valores passados está desativada para proteger o cálculo matemático do seu Preço Médio e Imposto de Renda.\n\nPor favor, utilize o botão de EXCLUIR para remover este lançamento e, em seguida, insira um novo aporte/venda corretamente.");
+                };
+
+                const excluirHistorico = async (h) => {
+                    const confirmacao = confirm(`Deseja realmente excluir este lançamento de ${formatarMoeda(h.amount)}?\n\nO saldo do seu ativo será recalculado automaticamente.`);
+                    if (!confirmacao) return;
+                    
+                    try { 
+                        const res = await fetch(`http://localhost:3001/api/ativos/history/${h.id}`, { method: 'DELETE' }); 
+                        if(res.ok) {
+                            // Tira da tela imediatamente
+                            historicoAtivo.value = historicoAtivo.value.filter(item => item.id !== h.id);
+                            // Atualiza os painéis gerais e gráficos
+                            carregarDadosEGraficos();
+                        } else {
+                            alert("Ocorreu um erro ao excluir o lançamento do banco de dados.");
+                        }
+                    } catch (e) { console.error(e); } 
+                };
 
                 // Funções Auxiliares do Extrato
                 const isSyncLegacy = (t) => ['market_update', 'sync', 'Valorização', 'Atualização'].includes(t);
@@ -816,7 +841,6 @@
                     setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150); 
                 });
 
-                // (FINAL DO ARQUIVO investimentos.html)
                 return { 
                     ativos, totalAplicado, subcategories, goals,
                     modalNovoAtivo, formNovoAtivo, abrirModalNovoAtivo, fecharModalNovoAtivo, salvarNovoAtivo,
@@ -826,7 +850,7 @@
                     prepararAporte, prepararVenda, confirmarOperacao, prepararRendimento, confirmarRendimento,
                     prepararSync, confirmarSync, prepararAtualizacaoManual, confirmarAtualizacaoManual,
                     abrirExtrato, traduzirTipo, getHistColor, getIconByType, isSyncLegacy,
-                    historicoAtivo // <-- BASTA ADICIONAR ESTA VARIÁVEL AQUI
+                    filtroGrafico, renderGraficos, historicoAtivo, editarHistorico, excluirHistorico
                 };
             }
         }).mount('#app');
