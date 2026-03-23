@@ -20,7 +20,8 @@ if (!fs.existsSync(userDataPath)) {
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
-// Inicialização das Tabelas da V2 (Estrutura Completa)
+// 1. Inicialização das Tabelas da V2 (Estrutura Base Original)
+// Nota: O SQLite ignora as novas colunas aqui se a tabela já existir.
 db.exec(`
     CREATE TABLE IF NOT EXISTS Classes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,5 +93,46 @@ db.exec(`
         value TEXT
     );
 `);
+
+
+// ============================================================================
+// 2. SISTEMA DE MIGRAÇÃO SEGURA (Atualiza tabelas antigas sem perder dados)
+// ============================================================================
+
+// Função auxiliar para verificar se uma coluna existe numa tabela
+function columnExists(tableName, columnName) {
+    const tableInfo = db.pragma(`table_info(${tableName})`);
+    return tableInfo.some(col => col.name === columnName);
+}
+
+// Módulo de Rebalanceamento e Objetivos (Tabela Assets)
+if (!columnExists('Assets', 'is_rebalancing_active')) {
+    console.log("Migração: Adicionando coluna 'is_rebalancing_active' na tabela Assets...");
+    db.exec(`ALTER TABLE Assets ADD COLUMN is_rebalancing_active INTEGER DEFAULT 1;`);
+}
+
+if (!columnExists('Assets', 'goal_id')) {
+    console.log("Migração: Adicionando coluna 'goal_id' na tabela Assets...");
+    db.exec(`ALTER TABLE Assets ADD COLUMN goal_id INTEGER;`);
+}
+
+// Módulo de Impostos (Tabela EquityHistory)
+if (!columnExists('EquityHistory', 'tax_due')) {
+    console.log("Migração: Adicionando coluna 'tax_due' na tabela EquityHistory...");
+    db.exec(`ALTER TABLE EquityHistory ADD COLUMN tax_due REAL DEFAULT 0;`);
+}
+
+if (!columnExists('EquityHistory', 'lucro')) {
+    console.log("Migração: Adicionando coluna 'lucro' na tabela EquityHistory...");
+    db.exec(`ALTER TABLE EquityHistory ADD COLUMN lucro REAL DEFAULT 0;`);
+}
+
+// Módulo de Objetivos - Correção de Nomenclatura (Tabela Goals)
+if (!columnExists('Goals', 'icon')) {
+    console.log("Migração: Adicionando coluna 'icon' na tabela Goals...");
+    db.exec(`ALTER TABLE Goals ADD COLUMN icon TEXT DEFAULT 'target';`);
+}
+
+// ============================================================================
 
 module.exports = db;

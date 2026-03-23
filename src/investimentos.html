@@ -167,15 +167,27 @@
             
             <div class="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
                 
-                <div class="flex justify-between items-start mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                     <div>
-                        <h3 class="text-lg font-bold text-slate-800 mb-2">Evolução dos Aportes</h3>
-                        <p class="text-xs text-slate-500">Acompanhe o tamanho dos seus aportes mensais (barras) frente ao crescimento (linha).</p>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Evolução e Receitas</h3>
+                        <p class="text-xs text-slate-500">Acompanhe aportes, proventos e o crescimento acumulado.</p>
                     </div>
-                    <select v-model="filtroGrafico" @change="renderGraficos" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 py-2 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer shadow-sm">
-                        <option value="todos">Visão Geral (Todos)</option>
-                        <option v-for="a in ativos" :key="a.id" :value="a.id">{{ a.name }}</option>
-                    </select>
+                    
+                    <!-- NOVOS FILTROS DUPLOS DO GRÁFICO -->
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <!-- Filtro de Tipo de Visualização -->
+                        <select v-model="tipoVisaoGrafico" @change="renderGraficos" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 py-2 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer shadow-sm">
+                            <option value="geral">Visão Geral</option>
+                            <option value="aportes">Apenas Aportes</option>
+                            <option value="proventos">Apenas Proventos</option>
+                        </select>
+
+                        <!-- Filtro de Ativo -->
+                        <select v-model="filtroGrafico" @change="renderGraficos" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 py-2 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer shadow-sm">
+                            <option value="todos">Todos os Ativos</option>
+                            <option v-for="a in ativos" :key="a.id" :value="a.id">{{ a.name }}</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="relative h-64 w-full">
@@ -341,6 +353,7 @@
             </div>
         </div>
 
+        <!-- ... Outros Modais (Sincronização, Atualização Manual, Extrato) mantidos integralmente ... -->
         <div v-if="modalSync.aberto" @click.self="modalSync.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-blue-50">
@@ -439,6 +452,19 @@
                             </p>
                             <p v-if="h.quantity > 0" class="text-xs text-slate-500">{{ h.quantity }} cotas</p>
                             
+                            <!-- ETIQUETAS DE LUCRO E IR DEVIDO -->
+                            <div v-if="h.type === 'withdrawal' && h.lucro !== undefined" class="flex gap-1.5 mt-1.5 mb-0.5">
+                                <span v-if="h.lucro > 0" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200">
+                                    Lucro: {{ formatarMoeda(h.lucro) }}
+                                </span>
+                                <span v-else-if="h.lucro < 0" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                                    Prej: {{ formatarMoeda(h.lucro) }}
+                                </span>
+                                <span v-if="h.ir_devido > 0" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200" title="IR Retido/Devido">
+                                    IR: {{ formatarMoeda(h.ir_devido) }}
+                                </span>
+                            </div>
+
                             <div class="flex gap-1 mt-2">
                                 <button @click="editarHistorico(h)" class="p-1.5 bg-white border border-slate-200 rounded-lg hover:border-blue-300 hover:text-blue-600 text-slate-400 transition-colors" title="Editar Lançamento">
                                     <span class="icon-wrapper" v-html="getIcon('edit', 14)"></span>
@@ -449,7 +475,6 @@
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
@@ -469,8 +494,9 @@
                 const subcategories = ref([]);
                 const goals = ref([]);
                 
-                // Variáveis para o Filtro de Gráfico
+                // Variáveis para o Filtro de Gráfico (NOVO: tipoVisaoGrafico)
                 const filtroGrafico = ref('todos');
+                const tipoVisaoGrafico = ref('geral');
                 const historicoGlobalCompleto = ref([]);
                 
                 const modalNovoAtivo = ref({ aberto: false });
@@ -519,9 +545,9 @@
                     } catch(e) { return ""; } 
                 };
 
-                // --- INTELIGÊNCIA DE GRÁFICOS (CHART.JS) ---
+                // --- INTELIGÊNCIA DE GRÁFICOS (CHART.JS) - ATUALIZADO ---
                 const renderGraficos = () => {
-                    // 1. Gráfico de Pizza (Não sofre ação do filtro de dropdown)
+                    // 1. Gráfico de Pizza
                     const ctxPizza = document.getElementById('pieChart');
                     if (ctxPizza) {
                         if (graficoPizzaObj) graficoPizzaObj.destroy();
@@ -549,53 +575,114 @@
                         });
                     }
 
-                    // 2. Gráfico de Linha (Aplica o Filtro Selecionado)
+                    // 2. Gráfico de Linha (Aplica os 2 Filtros: Ativo e Tipo de Visão)
                     const ctxLinha = document.getElementById('lineChart');
                     if (ctxLinha) {
                         if (graficoLinhaObj) graficoLinhaObj.destroy();
 
                         let historyToChart = historicoGlobalCompleto.value;
                         
-                        // Aplica o filtro se não for "todos"
+                        // Filtro 1: Por Ativo
                         if (filtroGrafico.value !== 'todos') {
                             historyToChart = historyToChart.filter(h => h.asset_id === filtroGrafico.value);
                         }
 
+                        // Agrupamento de Aportes vs Proventos
                         const agrupadoporMes = {};
                         historyToChart.forEach(h => {
                             if (!h.date) return;
                             const mesAno = h.date.substring(0, 7);
-                            if (!agrupadoporMes[mesAno]) agrupadoporMes[mesAno] = { aporteLíquido: 0 };
+                            if (!agrupadoporMes[mesAno]) agrupadoporMes[mesAno] = { aporteLíquido: 0, provento: 0 };
+                            
                             if (h.type === 'contribution') agrupadoporMes[mesAno].aporteLíquido += h.amount;
                             if (h.type === 'withdrawal') agrupadoporMes[mesAno].aporteLíquido -= h.amount;
+                            if (h.type === 'dividend') agrupadoporMes[mesAno].provento += h.amount;
                         });
 
                         const mesesOrdenados = Object.keys(agrupadoporMes).sort();
                         const labelsMeses = []; 
-                        const aportesMensais = []; 
-                        const acumulado = [];
-                        let somaAcumulada = 0;
+                        
+                        const dataAportesMensais = []; 
+                        const dataProventosMensais = []; 
+                        const dataLinhaAcumulada = [];
+                        
+                        let somaAcumuladaLinha = 0;
                         const mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
                         mesesOrdenados.forEach(mesAno => {
                             const [ano, mes] = mesAno.split('-');
                             labelsMeses.push(`${mesesAbrev[parseInt(mes)-1]}/${ano.substring(2)}`);
-                            const valLiquido = agrupadoporMes[mesAno].aporteLíquido;
-                            aportesMensais.push(valLiquido);
-                            somaAcumulada += valLiquido;
-                            acumulado.push(somaAcumulada);
+                            
+                            const valAporte = agrupadoporMes[mesAno].aporteLíquido;
+                            const valProvento = agrupadoporMes[mesAno].provento;
+
+                            dataAportesMensais.push(valAporte);
+                            dataProventosMensais.push(valProvento);
+
+                            // Inteligência da Linha consoante a Visão escolhida
+                            if (tipoVisaoGrafico.value === 'geral' || tipoVisaoGrafico.value === 'aportes') {
+                                somaAcumuladaLinha += valAporte;
+                            } else if (tipoVisaoGrafico.value === 'proventos') {
+                                somaAcumuladaLinha += valProvento;
+                            }
+                            
+                            dataLinhaAcumulada.push(somaAcumuladaLinha);
                         });
+
+                        // Construção Condicional dos Datasets (As barras que vão aparecer)
+                        const datasets = [];
+
+                        // A Linha (Vem primeiro para ficar por cima das barras)
+                        let tituloLinha = 'Aportes Acumulados';
+                        if (tipoVisaoGrafico.value === 'proventos') tituloLinha = 'Bola de Neve (Proventos Acumulados)';
+
+                        // Cores dinâmicas para a linha: Azul para Aportes/Geral, Roxo para Proventos
+                        const isProvento = tipoVisaoGrafico.value === 'proventos';
+
+                        datasets.push({ 
+                            type: 'line', 
+                            label: tituloLinha, 
+                            data: dataLinhaAcumulada.length ? dataLinhaAcumulada : [0], 
+                            borderColor: isProvento ? '#9333ea' : '#2563eb', // Roxo ou Azul
+                            backgroundColor: isProvento ? 'rgba(147, 51, 234, 0.1)' : 'rgba(37, 99, 235, 0.1)', 
+                            borderWidth: 3, 
+                            fill: true, 
+                            tension: 0.3, 
+                            yAxisID: 'y' 
+                        });
+
+                        // As Barras (Podem ser múltiplas lado a lado se for Visão Geral)
+                        if (tipoVisaoGrafico.value === 'geral' || tipoVisaoGrafico.value === 'aportes') {
+                            datasets.push({ 
+                                type: 'bar', 
+                                label: 'Aporte Mensal', 
+                                data: dataAportesMensais.length ? dataAportesMensais : [0], 
+                                backgroundColor: '#94a3b8', // Cinza Azulado
+                                borderRadius: 4, 
+                                yAxisID: 'y1' 
+                            });
+                        }
+
+                        if (tipoVisaoGrafico.value === 'geral' || tipoVisaoGrafico.value === 'proventos') {
+                            datasets.push({ 
+                                type: 'bar', 
+                                label: 'Provento Mensal', 
+                                data: dataProventosMensais.length ? dataProventosMensais : [0], 
+                                backgroundColor: '#a855f7', // Roxo Vivo
+                                borderRadius: 4, 
+                                yAxisID: 'y1' 
+                            });
+                        }
 
                         graficoLinhaObj = new Chart(ctxLinha, {
                             data: {
                                 labels: labelsMeses.length ? labelsMeses : ['Início'],
-                                datasets: [
-                                    { type: 'line', label: filtroGrafico.value === 'todos' ? 'Evolução Global' : 'Evolução do Ativo', data: acumulado.length ? acumulado : [0], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                                    { type: 'bar', label: 'Aporte Mês', data: aportesMensais.length ? aportesMensais : [0], backgroundColor: '#94a3b8', borderRadius: 4, yAxisID: 'y1' }
-                                ]
+                                datasets: datasets
                             },
                             options: { 
-                                responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, 
+                                responsive: true, 
+                                maintainAspectRatio: false, 
+                                interaction: { mode: 'index', intersect: false }, 
                                 scales: { 
                                     x: { grid: { display: false } }, 
                                     y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + val.toLocaleString('pt-BR') } }, 
@@ -626,14 +713,13 @@
                         const historyPromises = ativos.value.map(a => fetch(`http://localhost:3001/api/ativos/history/${a.id}`).then(r => r.json()));
                         const allHistoriesArray = await Promise.all(historyPromises);
                         
-                        // Guarda o histórico na memória para o filtro usar depois
                         historicoGlobalCompleto.value = allHistoriesArray.flat();
 
                         nextTick(() => { renderGraficos(); });
                     } catch (e) { console.error(e); }
                 };
 
-                // --- NOVO INVESTIMENTO E AUTOCOMPLETE ---
+                // --- RESTO DO CÓDIGO MANTIDO (MODAIS, OPERAÇÕES, ETC) ---
                 const abrirModalNovoAtivo = () => { 
                     sugestoes.value = []; 
                     formNovoAtivo.value = { name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true }; 
@@ -697,7 +783,6 @@
                     } catch (e) { console.error(e); }
                 };
 
-                // --- APORTES E VENDAS ---
                 const prepararAporte = (asset) => { 
                     formOp.value = { asset_id: asset.id, asset_name: asset.name, quantity: '', price: '', date: new Date().toISOString().split('T')[0] }; 
                     modalOp.value = { aberto: true, tipo: 'aporte' }; 
@@ -727,7 +812,6 @@
                     } catch (e) { console.error(e); }
                 };
 
-                // --- RENDIMENTOS ---
                 const prepararRendimento = (asset) => { 
                     formRendimento.value = { asset_id: asset.id, asset_name: asset.name, amount: '', date: new Date().toISOString().split('T')[0] }; 
                     modalRendimento.value.aberto = true; 
@@ -744,7 +828,6 @@
                     } catch (e) { console.error(e); }
                 };
 
-                // --- SINCRONIZAÇÃO MERCADO (BRAPI) ---
                 const prepararSync = async (asset) => {
                     modalSync.value = { aberto: true, asset_id: asset.id, asset_name: asset.name, quantidade: asset.total_quantity, sugerido: 0, novoSaldo: 0, carregando: true, erro: '' };
                     try {
@@ -770,7 +853,6 @@
                     } catch (e) { console.error(e); } 
                 };
 
-                // --- ATUALIZAÇÃO MANUAL (RENDA FIXA) ---
                 const prepararAtualizacaoManual = (asset) => { 
                     formAtualizacao.value = { asset_id: asset.id, asset_name: asset.name, saldoAtual: asset.current_balance, novoSaldo: '' }; 
                     modalAtualizacaoManual.value.aberto = true; 
@@ -786,18 +868,20 @@
                     } catch (e) { console.error(e); } 
                 };
 
-                // --- EXTRATO, EDIÇÃO E HISTÓRICO ---
                 const abrirExtrato = async (asset) => { 
                     try { 
                         const res = await fetch(`http://localhost:3001/api/ativos/history/${asset.id}`); 
-                        historicoAtivo.value = await res.json(); 
+                        const historicoData = await res.json(); 
+                        
+                        // Removemos o "Mock Provisório" daqui! Agora ele usa os dados reais do banco.
+
+                        historicoAtivo.value = historicoData; 
                         modalExtrato.value = { aberto: true, asset_id: asset.id, asset_name: asset.name }; 
                     } catch (e) { console.error(e); } 
                 };
                 
                 const fecharModalExtrato = () => { modalExtrato.value.aberto = false; };
 
-                // Funções de Integridade do Extrato (Editar e Excluir)
                 const editarHistorico = (h) => {
                     alert("⚠️ INTEGRIDADE FISCAL:\n\nA edição direta de valores passados está desativada para proteger o cálculo matemático do seu Preço Médio e Imposto de Renda.\n\nPor favor, utilize o botão de EXCLUIR para remover este lançamento e, em seguida, insira um novo aporte/venda corretamente.");
                 };
@@ -809,9 +893,7 @@
                     try { 
                         const res = await fetch(`http://localhost:3001/api/ativos/history/${h.id}`, { method: 'DELETE' }); 
                         if(res.ok) {
-                            // Tira da tela imediatamente
                             historicoAtivo.value = historicoAtivo.value.filter(item => item.id !== h.id);
-                            // Atualiza os painéis gerais e gráficos
                             carregarDadosEGraficos();
                         } else {
                             alert("Ocorreu um erro ao excluir o lançamento do banco de dados.");
@@ -819,7 +901,6 @@
                     } catch (e) { console.error(e); } 
                 };
 
-                // Funções Auxiliares do Extrato
                 const isSyncLegacy = (t) => ['market_update', 'sync', 'Valorização', 'Atualização'].includes(t);
                 const traduzirTipo = (t) => { 
                     if (isSyncLegacy(t)) return 'Sincronização'; 
@@ -850,7 +931,7 @@
                     prepararAporte, prepararVenda, confirmarOperacao, prepararRendimento, confirmarRendimento,
                     prepararSync, confirmarSync, prepararAtualizacaoManual, confirmarAtualizacaoManual,
                     abrirExtrato, traduzirTipo, getHistColor, getIconByType, isSyncLegacy,
-                    filtroGrafico, renderGraficos, historicoAtivo, editarHistorico, excluirHistorico
+                    filtroGrafico, tipoVisaoGrafico, renderGraficos, historicoAtivo, editarHistorico, excluirHistorico
                 };
             }
         }).mount('#app');
