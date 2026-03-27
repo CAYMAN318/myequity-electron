@@ -173,16 +173,13 @@
                         <p class="text-xs text-slate-500">Acompanhe aportes, proventos e o crescimento acumulado.</p>
                     </div>
                     
-                    <!-- NOVOS FILTROS DUPLOS DO GRÁFICO -->
                     <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <!-- Filtro de Tipo de Visualização -->
                         <select v-model="tipoVisaoGrafico" @change="renderGraficos" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 py-2 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer shadow-sm">
                             <option value="geral">Visão Geral</option>
                             <option value="aportes">Apenas Aportes</option>
                             <option value="proventos">Apenas Proventos</option>
                         </select>
 
-                        <!-- Filtro de Ativo -->
                         <select v-model="filtroGrafico" @change="renderGraficos" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 py-2 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer shadow-sm">
                             <option value="todos">Todos os Ativos</option>
                             <option v-for="a in ativos" :key="a.id" :value="a.id">{{ a.name }}</option>
@@ -204,6 +201,7 @@
             </div>
         </div>
 
+        <!-- MODAL NOVO ATIVO -->
         <div v-if="modalNovoAtivo.aberto" @click.self="fecharModalNovoAtivo" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
                 <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-blue-600 text-white rounded-t-3xl">
@@ -292,6 +290,7 @@
             </div>
         </div>
 
+        <!-- MODAL APORTE E VENDA -->
         <div v-if="modalOp.aberto" @click.self="modalOp.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100" :class="modalOp.tipo === 'aporte' ? 'bg-emerald-50' : 'bg-rose-50'">
@@ -328,6 +327,7 @@
             </div>
         </div>
 
+        <!-- MODAL RENDIMENTO -->
         <div v-if="modalRendimento.aberto" @click.self="modalRendimento.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-purple-50">
@@ -353,7 +353,7 @@
             </div>
         </div>
 
-        <!-- ... Outros Modais (Sincronização, Atualização Manual, Extrato) mantidos integralmente ... -->
+        <!-- MODAL SINCRONIZAÇÃO (ATUALIZADO PARA EDIÇÃO MANUAL) -->
         <div v-if="modalSync.aberto" @click.self="modalSync.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-blue-50">
@@ -365,21 +365,24 @@
                 <div class="p-6 space-y-4">
                     <div v-if="modalSync.carregando" class="text-center py-6">
                         <span class="icon-wrapper animate-spin text-blue-500 mb-3" v-html="getIcon('loader', 32)"></span>
-                        <p class="text-sm text-slate-500">Consultando mercado...</p>
+                        <p class="text-sm text-slate-500">A consultar mercado...</p>
                     </div>
                     <div v-else-if="modalSync.erro" class="text-center py-4">
                         <span class="icon-wrapper text-rose-500 mb-2" v-html="getIcon('alert-triangle', 32)"></span>
                         <p class="text-sm text-rose-600">{{ modalSync.erro }}</p>
                     </div>
                     <div v-else class="space-y-4">
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between">
-                            <span class="text-sm text-slate-500">Cotação Atualizada</span>
-                            <span class="font-bold text-slate-800">{{ formatarMoeda(modalSync.sugerido) }}</span>
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col gap-2">
+                            <label class="text-sm font-bold text-slate-700">Cotação do Ativo (R$)</label>
+                            <!-- Campo agora é editável -->
+                            <input type="number" step="0.01" v-model="modalSync.sugerido" class="w-full border border-blue-300 rounded-xl px-4 py-3 text-lg font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all">
                         </div>
-                        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between">
+                        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                             <span class="text-sm text-blue-700">Novo Saldo Financeiro</span>
-                            <span class="text-lg font-bold text-blue-800">{{ formatarMoeda(modalSync.novoSaldo) }}</span>
+                            <!-- O saldo é calculado matematicamente em tempo real -->
+                            <span class="text-xl font-bold text-blue-800">{{ formatarMoeda(modalSync.sugerido * modalSync.quantidade) }}</span>
                         </div>
+                        <p class="text-xs text-slate-400 text-center">Baseado em {{ modalSync.quantidade }} cotas na sua carteira.</p>
                     </div>
                 </div>
                 <div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
@@ -389,6 +392,7 @@
             </div>
         </div>
 
+        <!-- MODAL ATUALIZAÇÃO MANUAL -->
         <div v-if="modalAtualizacaoManual.aberto" @click.self="modalAtualizacaoManual.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-teal-50">
@@ -414,6 +418,7 @@
             </div>
         </div>
 
+        <!-- MODAL EXTRATO -->
         <div v-if="modalExtrato.aberto" @click.self="fecharModalExtrato" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -494,7 +499,7 @@
                 const subcategories = ref([]);
                 const goals = ref([]);
                 
-                // Variáveis para o Filtro de Gráfico (NOVO: tipoVisaoGrafico)
+                // Variáveis para o Filtro de Gráfico
                 const filtroGrafico = ref('todos');
                 const tipoVisaoGrafico = ref('geral');
                 const historicoGlobalCompleto = ref([]);
@@ -545,9 +550,8 @@
                     } catch(e) { return ""; } 
                 };
 
-                // --- INTELIGÊNCIA DE GRÁFICOS (CHART.JS) - ATUALIZADO ---
+                // --- INTELIGÊNCIA DE GRÁFICOS (CHART.JS) ---
                 const renderGraficos = () => {
-                    // 1. Gráfico de Pizza
                     const ctxPizza = document.getElementById('pieChart');
                     if (ctxPizza) {
                         if (graficoPizzaObj) graficoPizzaObj.destroy();
@@ -575,19 +579,16 @@
                         });
                     }
 
-                    // 2. Gráfico de Linha (Aplica os 2 Filtros: Ativo e Tipo de Visão)
                     const ctxLinha = document.getElementById('lineChart');
                     if (ctxLinha) {
                         if (graficoLinhaObj) graficoLinhaObj.destroy();
 
                         let historyToChart = historicoGlobalCompleto.value;
                         
-                        // Filtro 1: Por Ativo
                         if (filtroGrafico.value !== 'todos') {
                             historyToChart = historyToChart.filter(h => h.asset_id === filtroGrafico.value);
                         }
 
-                        // Agrupamento de Aportes vs Proventos
                         const agrupadoporMes = {};
                         historyToChart.forEach(h => {
                             if (!h.date) return;
@@ -619,7 +620,6 @@
                             dataAportesMensais.push(valAporte);
                             dataProventosMensais.push(valProvento);
 
-                            // Inteligência da Linha consoante a Visão escolhida
                             if (tipoVisaoGrafico.value === 'geral' || tipoVisaoGrafico.value === 'aportes') {
                                 somaAcumuladaLinha += valAporte;
                             } else if (tipoVisaoGrafico.value === 'proventos') {
@@ -629,21 +629,18 @@
                             dataLinhaAcumulada.push(somaAcumuladaLinha);
                         });
 
-                        // Construção Condicional dos Datasets (As barras que vão aparecer)
                         const datasets = [];
 
-                        // A Linha (Vem primeiro para ficar por cima das barras)
                         let tituloLinha = 'Aportes Acumulados';
                         if (tipoVisaoGrafico.value === 'proventos') tituloLinha = 'Bola de Neve (Proventos Acumulados)';
 
-                        // Cores dinâmicas para a linha: Azul para Aportes/Geral, Roxo para Proventos
                         const isProvento = tipoVisaoGrafico.value === 'proventos';
 
                         datasets.push({ 
                             type: 'line', 
                             label: tituloLinha, 
                             data: dataLinhaAcumulada.length ? dataLinhaAcumulada : [0], 
-                            borderColor: isProvento ? '#9333ea' : '#2563eb', // Roxo ou Azul
+                            borderColor: isProvento ? '#9333ea' : '#2563eb', 
                             backgroundColor: isProvento ? 'rgba(147, 51, 234, 0.1)' : 'rgba(37, 99, 235, 0.1)', 
                             borderWidth: 3, 
                             fill: true, 
@@ -651,13 +648,12 @@
                             yAxisID: 'y' 
                         });
 
-                        // As Barras (Podem ser múltiplas lado a lado se for Visão Geral)
                         if (tipoVisaoGrafico.value === 'geral' || tipoVisaoGrafico.value === 'aportes') {
                             datasets.push({ 
                                 type: 'bar', 
                                 label: 'Aporte Mensal', 
                                 data: dataAportesMensais.length ? dataAportesMensais : [0], 
-                                backgroundColor: '#94a3b8', // Cinza Azulado
+                                backgroundColor: '#94a3b8', 
                                 borderRadius: 4, 
                                 yAxisID: 'y1' 
                             });
@@ -668,7 +664,7 @@
                                 type: 'bar', 
                                 label: 'Provento Mensal', 
                                 data: dataProventosMensais.length ? dataProventosMensais : [0], 
-                                backgroundColor: '#a855f7', // Roxo Vivo
+                                backgroundColor: '#a855f7', 
                                 borderRadius: 4, 
                                 yAxisID: 'y1' 
                             });
@@ -719,7 +715,6 @@
                     } catch (e) { console.error(e); }
                 };
 
-                // --- RESTO DO CÓDIGO MANTIDO (MODAIS, OPERAÇÕES, ETC) ---
                 const abrirModalNovoAtivo = () => { 
                     sugestoes.value = []; 
                     formNovoAtivo.value = { name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true }; 
@@ -843,10 +838,12 @@
                     }
                 };
                 
+                // --- ATUALIZADO: Calcula o saldo com base no que foi digitado ---
                 const confirmarSync = async () => { 
                     try { 
+                        const saldoCalculado = modalSync.value.sugerido * modalSync.value.quantidade;
                         await fetch(`http://localhost:3001/api/ativos/aplicar-sync/${modalSync.value.asset_id}`, { 
-                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ novo_saldo: modalSync.value.novoSaldo }) 
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ novo_saldo: saldoCalculado }) 
                         }); 
                         modalSync.value.aberto = false; 
                         carregarDadosEGraficos(); 
@@ -868,12 +865,11 @@
                     } catch (e) { console.error(e); } 
                 };
 
+                // --- ATUALIZADO: Usa os dados reais vindos do backend (ativos.js) ---
                 const abrirExtrato = async (asset) => { 
                     try { 
                         const res = await fetch(`http://localhost:3001/api/ativos/history/${asset.id}`); 
                         const historicoData = await res.json(); 
-                        
-                        // Removemos o "Mock Provisório" daqui! Agora ele usa os dados reais do banco.
 
                         historicoAtivo.value = historicoData; 
                         modalExtrato.value = { aberto: true, asset_id: asset.id, asset_name: asset.name }; 
@@ -916,7 +912,6 @@
                     return getIcon(map[t] || 'circle', 20); 
                 };
 
-                // START
                 onMounted(() => { 
                     carregarDadosEGraficos(); 
                     setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150); 

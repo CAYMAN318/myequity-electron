@@ -191,21 +191,47 @@ router.post('/rendimento', (req, res) => {
 });
 
 // ============================================================================
-// 7. SINCRONIZAR COTAÇÃO (MOCK / PLACEHOLDER PARA API EXTERNA)
+// 7. SINCRONIZAR COTAÇÃO (AUTOMÁTICO VIA BRAPI)
 // ============================================================================
 router.post('/sync/:id', async (req, res) => {
     try {
         const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(req.params.id);
         if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
         
-        // Espaço reservado para a sua integração com Brapi / HG Finance
-        const precoMercado = asset.avg_price || 0; 
+        let precoMercado = 0;
+
+        // INSIRA A SUA CHAVE DA BRAPI AQUI
+        const BRAPI_TOKEN = 'COLOQUE_A_SUA_CHAVE_AQUI'; 
+
+        try {
+            // Inteligência para buscar Criptomoedas ou Ações/FIIs
+            let tickerUrl = asset.name;
+            if (asset.type === 'Cripto' && !tickerUrl.includes('-')) {
+                tickerUrl = `${tickerUrl}-BRL`; // Brapi exige o sufixo -BRL para criptos
+            }
+
+            // Chamada à API da Brapi
+            const response = await fetch(`https://brapi.dev/api/quote/${tickerUrl}?token=${BRAPI_TOKEN}`);
+            const data = await response.json();
+
+            if (data.results && data.results.length > 0) {
+                precoMercado = data.results[0].regularMarketPrice;
+            } else {
+                throw new Error("Cotação não encontrada na API.");
+            }
+        } catch (apiErr) {
+            console.error("Erro na API da Brapi:", apiErr.message);
+            return res.status(400).json({ error: "Falha ao consultar mercado. Verifique a sua chave Brapi." });
+        }
+        
         const novoSaldo = asset.total_quantity * precoMercado;
         
+        // Devolve o preço atualizado para o Frontend
         res.json({ sugerido: precoMercado, novoSaldo: novoSaldo });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
-
 // ============================================================================
 // 8. APLICAR NOVO SALDO (ATUALIZAÇÃO MANUAL OU VIA SYNC)
 // ============================================================================
