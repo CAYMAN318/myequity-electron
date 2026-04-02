@@ -13,76 +13,92 @@ router.get('/', (req, res) => {
 });
 
 // ============================================================================
-// 2. CRIAR NOVO CONTRATO DE DÍVIDA (Com parcelas pagas e prestação real)
+// 2. CRIAR NOVO CONTRATO DE DÍVIDA (Com Reconciliação Inicial no Extrato)
 // ============================================================================
 router.post('/', (req, res) => {
     const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
+    
     try {
-        db.prepare(`
-            INSERT INTO Loans (description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(description, total_principal, interest_rate, installments_total, installments_paid || 0, monthly_payment || 0, start_date, is_payroll_deductible ? 1 : 0);
+        const insertTransaction = db.transaction(() => {
+            // 1. Cria o contrato principal
+            const result = db.prepare(`
+                INSERT INTO Loans (description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(description, total_principal, interest_rate, installments_total, installments_paid || 0, monthly_payment || 0, start_date, is_payroll_deductible ? 1 : 0);
+            
+            const newLoanId = result.lastInsertRowid;
+
+            // 2. Se o usuário já informou que pagou parcelas, cria uma linha consolidada no Extrato
+            if (installments_paid > 0 && monthly_payment > 0) {
+                const valorConsolidado = installments_paid * monthly_payment;
+                
+                db.prepare(`
+                    INSERT INTO EquityHistory (loan_id, type, amount, quantity, interest_saved, date) 
+                    VALUES (?, 'initial_balance', ?, ?, 0, ?)
+                `).run(newLoanId, valorConsolidado, installments_paid, start_date);
+            }
+        });
+
+        insertTransaction();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ============================================================================
-// 3. EDITAR CONTRATO EXISTENTE
+// 3. ATUALIZAR CONTRATO EXISTENTE
 // ============================================================================
 router.put('/:id', (req, res) => {
-    const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment } = req.body;
+    const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
     try {
         db.prepare(`
-            UPDATE Loans SET 
-                description = ?, total_principal = ?, interest_rate = ?, 
-                installments_total = ?, installments_paid = ?, monthly_payment = ?
+            UPDATE Loans 
+            SET description = ?, total_principal = ?, interest_rate = ?, installments_total = ?, installments_paid = ?, monthly_payment = ?, start_date = ?, is_payroll_deductible = ?
             WHERE id = ?
-        `).run(description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment || 0, req.params.id);
+        `).run(description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible ? 1 : 0, req.params.id);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ============================================================================
-// 4. EXCLUIR CONTRATO
+// 4. EXCLUIR CONTRATO E SEU HISTÓRICO (Delete Real)
 // ============================================================================
 router.delete('/:id', (req, res) => {
-    try { 
-        db.prepare("DELETE FROM Loans WHERE id = ?").run(req.params.id); 
-        res.json({ success: true }); 
+    try {
+        // Agora também limpa o histórico associado para não deixar lixo no banco
+        db.transaction(() => {
+            db.prepare("DELETE FROM EquityHistory WHERE loan_id = ?").run(req.params.id);
+            db.prepare("DELETE FROM Loans WHERE id = ?").run(req.params.id);
+        })();
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ============================================================================
-// 5. MOTOR DE AMORTIZAÇÃO / PAGAMENTO
+// 5. REGISTRAR PAGAMENTO / AMORTIZAÇÃO (Calcula Abatimento de Juros)
 // ============================================================================
-router.post('/amortizar', (req, res) => {
-    const { loan_id, quantidade_parcelas, antecipar } = req.body;
+router.post('/amortize', (req, res) => {
+    const { loan_id, quantity, is_early_payment } = req.body;
+    
     try {
         const loan = db.prepare("SELECT * FROM Loans WHERE id = ?").get(loan_id);
         if (!loan) return res.status(404).json({ error: "Contrato não encontrado." });
-        
-        const parcelasRestantes = loan.installments_total - loan.installments_paid;
-        const parcelasParaPagar = Math.min(quantidade_parcelas, parcelasRestantes);
-        
-        if (parcelasParaPagar <= 0) return res.status(400).json({ error: "Este contrato já está liquidado." });
 
-        const jurosMensalDecimal = loan.interest_rate / 100;
-        
+        const parcelasParaPagar = parseInt(quantity) || 1;
         let valorPago = 0;
         let jurosPoupados = 0;
 
-        if (antecipar) {
-            // Pagamento Antecipado: O utilizador amortiza o principal puro. 
-            // Estimativa conservadora baseada na prestação menos os juros do mês.
-            const jurosDaParcelaEstimados = loan.total_principal * jurosMensalDecimal; 
-            const amortizacaoPura = loan.monthly_payment > jurosDaParcelaEstimados 
-                                    ? (loan.monthly_payment - jurosDaParcelaEstimados) 
+        if (is_early_payment) {
+            const numeroDeParcelasEstimados = loan.monthly_payment > 0 
+                                            ? Math.floor(loan.total_principal / loan.monthly_payment) 
+                                            : loan.installments_total;
+            
+            const amortizacaoPura = numeroDeParcelasEstimados > 0 
+                                    ? (loan.total_principal / numeroDeParcelasEstimados) 
                                     : (loan.total_principal / loan.installments_total);
             
             valorPago = amortizacaoPura * parcelasParaPagar;
             jurosPoupados = (loan.monthly_payment - amortizacaoPura) * parcelasParaPagar; 
         } else {
-            // Pagamento Normal: O utilizador paga a prestação contratada
             valorPago = loan.monthly_payment * parcelasParaPagar;
             jurosPoupados = 0;
         }
@@ -109,6 +125,38 @@ router.post('/amortizar', (req, res) => {
             quitado: novoStatus === 'quitted'
         });
 
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================================
+// 6. EXTRATO HISTÓRICO DE PAGAMENTOS
+// ============================================================================
+router.get('/history/:id', (req, res) => {
+    try {
+        const rows = db.prepare("SELECT * FROM EquityHistory WHERE loan_id = ? ORDER BY date DESC, id DESC").all(req.params.id);
+        res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================================
+// 7. EXCLUIR ITEM DO HISTÓRICO (ESTORNO DE PAGAMENTO)
+// ============================================================================
+router.delete('/history/:id', (req, res) => {
+    try {
+        const historyItem = db.prepare("SELECT * FROM EquityHistory WHERE id = ?").get(req.params.id);
+        if (!historyItem) return res.status(404).json({ error: "Registro não encontrado." });
+
+        if (historyItem.type === 'loan_payment' || historyItem.type === 'initial_balance') {
+            db.prepare(`
+                UPDATE Loans 
+                SET installments_paid = MAX(0, installments_paid - ?),
+                    status = 'active'
+                WHERE id = ?
+            `).run(historyItem.quantity || 1, historyItem.loan_id);
+        }
+
+        db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
