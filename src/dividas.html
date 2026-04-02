@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyEquity - Gestão de Dívidas V2</title>
     
-    <!-- Bibliotecas Locais -->
     <script src="libs/tailwindcss.js"></script>
     <script src="libs/vue.global.js"></script>
     <script src="libs/lucide.js"></script>
@@ -104,7 +103,6 @@
                             <span class="icon-wrapper" v-html="getIcon('home', 24)"></span>
                         </div>
                         <div class="flex gap-2">
-                            <!-- Botões Restituidos com Bordas Fortes -->
                             <button @click="abrirEdicao(loan)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-blue-300 hover:text-blue-600 shadow-sm transition-all" title="Editar Contrato">
                                 <span class="icon-wrapper" v-html="getIcon('settings', 18)"></span>
                             </button>
@@ -139,7 +137,7 @@
                         </div>
                         <div class="flex justify-between">
                             <span class="text-xs font-medium text-slate-500">Taxa Custo Efetivo</span>
-                            <span class="text-xs font-bold text-rose-600">{{ loan.interest_rate }}% a.a</span>
+                            <span class="text-xs font-bold text-rose-600">{{ loan.interest_rate }}% a.m</span>
                         </div>
                     </div>
 
@@ -154,7 +152,6 @@
                     </div>
                 </div>
 
-                <!-- BOTÕES DUPLOS (Pagar e Extrato) -->
                 <div v-if="loan.status !== 'quitted'" class="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                     <button @click="abrirAmortizacao(loan)" class="py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs rounded-xl transition-colors flex justify-center items-center gap-1">
                         <span class="icon-wrapper" v-html="getIcon('dollar-sign', 14)"></span> Pagamento
@@ -164,7 +161,6 @@
                     </button>
                 </div>
                 
-                <!-- Extrato para dívidas quitadas -->
                 <div v-if="loan.status === 'quitted'" class="mt-4 pt-4 border-t border-slate-100">
                     <button @click="abrirExtrato(loan)" class="w-full py-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 font-bold text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-slate-200">
                         <span class="icon-wrapper" v-html="getIcon('history', 14)"></span> Ver Extrato Final
@@ -173,9 +169,7 @@
             </div>
         </div>
 
-        <!-- SEÇÃO DOS GRÁFICOS (RESTAURADOS E APRIMORADOS) -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-            <!-- Gráfico Redondo de Distribuição (Pizza) -->
             <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
                 <h3 class="text-lg font-bold text-slate-800 mb-2">Distribuição de Dívidas</h3>
                 <p class="text-xs text-slate-500 mb-6">Proporção do seu saldo devedor atual.</p>
@@ -184,7 +178,6 @@
                 </div>
             </div>
 
-            <!-- Gráfico de Linha do Tempo (Compromissos) -->
             <div class="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
                 <h3 class="text-lg font-bold text-slate-800 mb-2">Linha do Tempo dos Compromissos</h3>
                 <p class="text-xs text-slate-500 mb-6">Previsão da queda do seu Custo Mensal à medida que os contratos chegam ao fim.</p>
@@ -194,7 +187,6 @@
             </div>
         </div>
 
-        <!-- MODAL NOVO/EDITAR CONTRATO -->
         <div v-if="modalLoan.aberto || modalEdicao.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
                 <div class="p-5 border-b border-slate-100 flex justify-between items-center text-white rounded-t-3xl" :class="modalEdicao.aberto ? 'bg-slate-700' : 'bg-rose-600'">
@@ -220,8 +212,8 @@
                             <p class="text-[10px] text-slate-400 mt-1">S/ Juros da Dívida</p>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Taxa CET (% a.a)</label>
-                            <input v-model="modalAtivo.interest_rate" type="number" step="0.01" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Taxa de Juros (% a.m)</label>
+                            <input v-model="modalAtivo.interest_rate" type="number" step="0.001" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none">
                         </div>
                     </div>
 
@@ -263,7 +255,6 @@
 
                 </div>
                 <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-between items-center">
-                    <!-- O Botão de Excluir Contrato do Modal também está mantido como redundância -->
                     <button v-if="modalEdicao.aberto" @click="excluirDivida" class="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-xl transition-all" title="Excluir Contrato">
                         <span class="icon-wrapper" v-html="getIcon('trash-2', 20)"></span>
                     </button>
@@ -277,7 +268,6 @@
             </div>
         </div>
 
-        <!-- MODAL AMORTIZAÇÃO (PAGAMENTO) -->
         <div v-if="modalAmortizar.aberto" @click.self="modalAmortizar.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-rose-50">
@@ -321,7 +311,6 @@
             </div>
         </div>
 
-        <!-- MODAL EXTRATO DE DÍVIDA -->
         <div v-if="modalExtrato.aberto" @click.self="fecharModalExtrato" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -337,7 +326,6 @@
                     </button>
                 </div>
                 
-                <!-- Resumo Fixo Inteligente -->
                 <div class="p-5 border-b border-slate-100 bg-white grid grid-cols-3 gap-4 text-center shadow-sm z-10 relative">
                     <div>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Amortizado</p>
@@ -353,7 +341,6 @@
                     </div>
                 </div>
 
-                <!-- Lista Limpa (Com Rolagem) -->
                 <div class="p-6 space-y-3 overflow-y-auto custom-scrollbar bg-slate-50 flex-grow">
                     
                     <div v-if="historicoDivida.length === 0" class="text-center py-8 text-slate-400">
@@ -434,14 +421,15 @@
                     return dividas.value.reduce((acc, curr) => acc + (curr.status !== 'quitted' ? curr.monthly_payment : 0), 0);
                 });
 
+                // CÁLCULO DA TABELA PRICE ATUALIZADO (Agora usa a taxa mensal direto)
                 const priceSugerida = computed(() => {
                     const t = modalAtivo.value;
                     const p = parseFloat(t.total_principal) || 0;
-                    const i_ano = parseFloat(t.interest_rate) || 0;
+                    const i_mes_input = parseFloat(t.interest_rate) || 0;
                     const n = parseInt(t.installments_total) || 0;
                     
-                    if (p > 0 && i_ano > 0 && n > 0) {
-                        const i_mes = Math.pow(1 + (i_ano/100), 1/12) - 1;
+                    if (p > 0 && i_mes_input > 0 && n > 0) {
+                        const i_mes = i_mes_input / 100;
                         const pmt = p * (i_mes / (1 - Math.pow(1 + i_mes, -n)));
                         return pmt;
                     }
@@ -460,7 +448,6 @@
                     return n > 0 ? (p / n) : 0;
                 });
 
-                // Resumo automático no cabeçalho do Extrato
                 const resumoExtrato = computed(() => {
                     return historicoDivida.value.reduce((acc, curr) => {
                         acc.totalPago += curr.amount;
@@ -551,7 +538,6 @@
                     } catch (e) { console.error(e); } 
                 };
 
-                // Nova função para deletar diretamente a partir do botão no card
                 const excluirDividaDireto = async (loan) => {
                     if (!confirm(`Tem certeza que deseja excluir o passivo "${loan.description}"? Todos os pagamentos também serão apagados.`)) return;
                     try { 
@@ -585,7 +571,6 @@
                     } catch (e) { console.error(e); } 
                 };
 
-                // LÓGICA DO EXTRATO
                 const abrirExtrato = async (loan) => {
                     try {
                         const res = await fetch(`http://localhost:3001/api/dividas/history/${loan.id}`);
@@ -609,7 +594,6 @@
                 };
 
                 const renderGraficos = () => {
-                    // Gráfico de Pizza (Distribuição do Saldo Devedor)
                     const ctxPizza = document.getElementById('dividasPieChart');
                     if (ctxPizza) {
                         if (graficoPizzaObj) graficoPizzaObj.destroy();
@@ -639,24 +623,19 @@
                         });
                     }
 
-                    // Gráfico de Linha do Tempo (Previsão do Custo Mensal)
                     const ctxLinha = document.getElementById('linhaTempoChart');
                     if (ctxLinha) {
                         if (graficoLinhaObj) graficoLinhaObj.destroy();
                         
                         const dividasAtivas = dividas.value.filter(d => d.status !== 'quitted');
                         
-                        // Descobre qual dívida vai demorar mais tempo para ser paga
                         const maxMesesRestantes = Math.max(...dividasAtivas.map(d => d.installments_total - d.installments_paid), 0);
-                        
-                        // Protege para o gráfico não ficar gigante e travar a tela (Limite de 10 anos ou 120 meses na tela)
                         let limit = Math.max(Math.min(maxMesesRestantes, 120), 12); 
                         
                         const labelsLinha = [];
                         const dataLinha = [];
                         const dataHoje = new Date();
                         
-                        // Ajusta a quantidade de pontos na tela para não embolar os textos das datas
                         const passo = limit > 24 ? Math.ceil(limit / 24) : 1; 
 
                         for (let i = 0; i <= limit; i += passo) {
@@ -666,7 +645,6 @@
                             let somaMesFuturo = 0;
                             dividasAtivas.forEach(loan => {
                                 const remanescentes = loan.installments_total - loan.installments_paid;
-                                // Se a dívida ainda não estiver quitada naquele mês no futuro, soma a parcela
                                 if (remanescentes > i) {
                                     somaMesFuturo += loan.monthly_payment;
                                 }
