@@ -1,10 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const https = require('https'); // Biblioteca nativa para chamadas web seguras
+const https = require('https');
 
 // ============================================================================
-// 1. LISTAGEM DE ATIVOS (COM CÁLCULO DINÂMICO DE PM E RELACIONAMENTOS)
+// FUNÇÃO CENTRAL DE INTEGRIDADE MATEMÁTICA (NOVO)
+// Resolve problemas de precisão de decimais (Cripto/Fundos) e dessincronização de cache.
+// ============================================================================
+function calcularEstadoMatematico(asset_id, dbInstance) {
+    const history = dbInstance.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset_id);
+    let qty = 0;
+    let invested = 0;
+
+    history.forEach(h => {
+        if (h.type === 'contribution') {
+            qty += (h.quantity || 0);
+            invested += (h.amount || 0);
+        } else if (h.type === 'withdrawal') {
+            qty -= (h.quantity || 0);
+            if (qty > 0) {
+                invested -= (invested / (qty + (h.quantity || 0))) * (h.quantity || 0);
+            } else {
+                invested = 0;
+            }
+        }
+    });
+
+    return {
+        quantidade: qty,
+        precoMedio: qty > 0 ? (invested / qty) : 0
+    };
+}
+
+// ============================================================================
+// 1. LISTAGEM DE ATIVOS 
 // ============================================================================
 router.get('/', (req, res) => {
     try {
@@ -21,27 +50,10 @@ router.get('/', (req, res) => {
         `).all();
         
         const enriched = assets.map(asset => {
-            const history = db.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset.id);
-            let totalQty = 0;
-            let totalInvestido = 0;
-            
-            history.forEach(h => {
-                if (h.type === 'contribution') {
-                    totalQty += (h.quantity || 0);
-                    totalInvestido += (h.amount || 0);
-                } else if (h.type === 'withdrawal') {
-                    totalQty -= (h.quantity || 0);
-                    if (totalQty > 0) {
-                        totalInvestido -= (totalInvestido / (totalQty + (h.quantity || 0))) * (h.quantity || 0);
-                    } else {
-                        totalInvestido = 0;
-                    }
-                }
-            });
-            
-            asset.avg_price = totalQty > 0 ? (totalInvestido / totalQty) : 0;
-            asset.total_quantity = totalQty;
-            
+            // Usa o novo motor central para enviar dados sempre corretos para a tela
+            const estadoReal = calcularEstadoMatematico(asset.id, db);
+            asset.avg_price = estadoReal.precoMedio;
+            asset.total_quantity = estadoReal.quantidade;
             return asset;
         });
 
@@ -87,8 +99,10 @@ router.post('/aporte', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
-            const qtdAntiga = asset.total_quantity || 0;
-            const pmAntigo = asset.avg_price || 0;
+            // Calcula matematicamente o estado real lendo todo o histórico
+            const estadoReal = calcularEstadoMatematico(asset_id, db);
+            const qtdAntiga = estadoReal.quantidade;
+            const pmAntigo = estadoReal.precoMedio;
             
             const novaQtdTotal = qtdAntiga + qtd;
             const novoPM = ((qtdAntiga * pmAntigo) + valorTotal) / novaQtdTotal;
@@ -115,7 +129,7 @@ router.post('/aporte', (req, res) => {
 });
 
 // ============================================================================
-// 5. REGISTRAR VENDA
+// 5. REGISTRAR VENDA (COM TRAVA BLINDADA E TOLERÂNCIA DE DECIMAIS)
 // ============================================================================
 router.post('/venda', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
@@ -131,11 +145,15 @@ router.post('/venda', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
-            if (qtdVendida > asset.total_quantity) {
-                throw new Error("Você não possui cotas suficientes para esta venda.");
+            // Calcula o estado real blindando contra "Memórias Fantasmas" do DB
+            const estadoReal = calcularEstadoMatematico(asset_id, db);
+
+            // A margem de tolerância (0.00000001) impede erros do JavaScript ao comparar cotas de Fundos e Cripto
+            if (qtdVendida > (estadoReal.quantidade + 0.00000001)) {
+                throw new Error(`Você possui ${estadoReal.quantidade.toFixed(4)} cotas, mas tentou vender ${qtdVendida.toFixed(4)}.`);
             }
 
-            const custoDeAquisicao = qtdVendida * asset.avg_price;
+            const custoDeAquisicao = qtdVendida * estadoReal.precoMedio;
             lucroRealizado = valorBrutoVenda - custoDeAquisicao;
 
             if (lucroRealizado > 0) {
@@ -146,8 +164,8 @@ router.post('/venda', (req, res) => {
                 }
             }
 
-            const novaQtdTotal = asset.total_quantity - qtdVendida;
-            const novoSaldo = novaQtdTotal === 0 ? 0 : asset.current_balance * (novaQtdTotal / asset.total_quantity);
+            const novaQtdTotal = Math.max(0, estadoReal.quantidade - qtdVendida);
+            const novoSaldo = novaQtdTotal === 0 ? 0 : asset.current_balance * (novaQtdTotal / estadoReal.quantidade);
 
             db.prepare(`
                 UPDATE Assets 
@@ -190,7 +208,7 @@ router.post('/rendimento', (req, res) => {
 });
 
 // ============================================================================
-// 7. SINCRONIZAR COTAÇÃO (BRAPI PARA B3 / BINANCE PARA CRIPTO)
+// 7. SINCRONIZAR COTAÇÃO (BRAPI / BINANCE)
 // ============================================================================
 router.post('/sync/:id', (req, res) => {
     try {
@@ -200,9 +218,10 @@ router.post('/sync/:id', (req, res) => {
         let tickerLimpo = asset.name.trim().toUpperCase();
         const isCripto = (asset.type === 'Cripto');
 
-        // DESVIO PARA CRIPTOMOEDAS (Usa a Binance gratuitamente)
+        // Puxa a quantidade exata para calcular o saldo projetado
+        const qtdExata = calcularEstadoMatematico(asset.id, db).quantidade;
+
         if (isCripto) {
-            // A Binance exige o par junto, ex: BTCBRL. Vamos limpar traços se houver.
             tickerLimpo = tickerLimpo.replace('-', '').replace('BRL', '') + 'BRL';
             const urlBinance = `https://api.binance.com/api/v3/ticker/price?symbol=${tickerLimpo}`;
 
@@ -222,7 +241,7 @@ router.post('/sync/:id', (req, res) => {
                             return res.status(400).json({ error: "Preço indisponível na Binance hoje." });
                         }
 
-                        const novoSaldo = asset.total_quantity * precoMercado;
+                        const novoSaldo = qtdExata * precoMercado;
                         return res.json({ sugerido: precoMercado, novoSaldo: novoSaldo });
                     } catch (parseErr) {
                         return res.status(500).json({ error: "Erro ao interpretar dados da Binance." });
@@ -233,7 +252,6 @@ router.post('/sync/:id', (req, res) => {
             });
 
         } else {
-            // DESVIO PARA BOLSA B3 (Usa a Brapi com o seu Token)
             const settingsRow = db.prepare("SELECT value FROM Settings WHERE key = 'brapi_token'").get();
             const BRAPI_TOKEN = settingsRow ? settingsRow.value : '';
 
@@ -262,7 +280,7 @@ router.post('/sync/:id', (req, res) => {
                                 return res.status(400).json({ error: "A Brapi encontrou o ativo, mas o preço não está disponível hoje." });
                             }
 
-                            const novoSaldo = asset.total_quantity * precoMercado;
+                            const novoSaldo = qtdExata * precoMercado;
                             return res.json({ sugerido: precoMercado, novoSaldo: novoSaldo });
                         } else {
                             return res.status(400).json({ error: `Ticker '${tickerLimpo}' não encontrado na Bolsa.` });
@@ -295,7 +313,7 @@ router.post('/aplicar-sync/:id', (req, res) => {
 });
 
 // ============================================================================
-// 9. EXTRATO HISTÓRICO DE UM ATIVO (CÁLCULO DINÂMICO DE LUCRO E FILTRO LIMPO)
+// 9. EXTRATO HISTÓRICO DE UM ATIVO
 // ============================================================================
 router.get('/history/:id', (req, res) => {
     try {
@@ -345,7 +363,7 @@ router.get('/history/:id', (req, res) => {
 });
 
 // ============================================================================
-// 10. EXCLUIR ITEM DO HISTÓRICO (COM AJUSTE ESTORNO DE SALDO)
+// 10. EXCLUIR ITEM DO HISTÓRICO (SEMPRE RECALCULA O CACHE DO BANCO)
 // ============================================================================
 router.delete('/history/:id', (req, res) => {
     try {
@@ -355,13 +373,22 @@ router.delete('/history/:id', (req, res) => {
             return res.status(404).json({ error: "Registro não encontrado." });
         }
 
+        const assetId = historyItem.asset_id;
+
+        // Estorno proporcional do Saldo Financeiro
         if (historyItem.type === 'contribution') {
-            db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(historyItem.amount, historyItem.asset_id);
+            db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(historyItem.amount, assetId);
         } else if (historyItem.type === 'withdrawal') {
-            db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(historyItem.amount, historyItem.asset_id);
+            db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(historyItem.amount, assetId);
         }
 
+        // Deleta do Extrato
         db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
+
+        // AUTOCURA DO BANCO DE DADOS: Atualiza o cache do Asset para nunca ficar dessincronizado
+        const estadoCurado = calcularEstadoMatematico(assetId, db);
+        db.prepare("UPDATE Assets SET total_quantity = ?, avg_price = ? WHERE id = ?").run(estadoCurado.quantidade, estadoCurado.precoMedio, assetId);
+
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
