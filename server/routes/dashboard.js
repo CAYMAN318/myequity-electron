@@ -12,7 +12,7 @@ router.get('/', (req, res) => {
         const totalDividas = db.prepare(`SELECT SUM(total_principal - (CAST(total_principal AS REAL) / installments_total * installments_paid)) as total FROM Loans WHERE status = 'active'`).get().total || 0;
         const totalRendimentos = db.prepare("SELECT SUM(amount) as total FROM EquityHistory WHERE type = 'dividend'").get().total || 0;
         
-        // MÓDULO DE IMPOSTOS (Agora direto, pois o database.js no Canvas garante a coluna)
+        // MÓDULO DE IMPOSTOS
         const totalImpostosDevidos = db.prepare("SELECT SUM(tax_due) as total FROM EquityHistory WHERE tax_due > 0").get().total || 0;
         const impostosDetalhados = db.prepare(`
             SELECT EH.id, EH.date, EH.amount as valor_venda, EH.tax_due as ir_devido, A.name as asset_name
@@ -22,46 +22,28 @@ router.get('/', (req, res) => {
             ORDER BY EH.date DESC
         `).all();
 
-        // 2. MÓDULO DE REBALANCEAMENTO DE PORTFÓLIO (Lendo is_rebalancing_active)
-        const classes = db.prepare(`
-            SELECT C.id, C.name, C.target_percentage, C.color,
-                   COALESCE(SUM(A.current_balance), 0) as current_balance
+        // 2. MÓDULO DE REBALANCEAMENTO (Corrigido para buscar target_percentage em Classes)
+        const rebalanceModule = db.prepare(`
+            SELECT C.name as category, 
+                   SUM(A.current_balance) as current_amount,
+                   C.target_percentage as target_pct
             FROM Classes C
             LEFT JOIN Subcategories S ON S.class_id = C.id
             LEFT JOIN Assets A ON A.subcategory_id = S.id AND A.status = 'active' AND A.is_rebalancing_active = 1
             GROUP BY C.id
         `).all();
 
-        const totalRebalance = classes.reduce((sum, c) => sum + c.current_balance, 0);
-
-        const rebalanceModule = classes.map(c => {
-            const current_percentage = totalRebalance > 0 ? (c.current_balance / totalRebalance) * 100 : 0;
-            const target_balance = (c.target_percentage / 100) * totalRebalance;
-            const diff_value = target_balance - c.current_balance;
-
-            return {
-                id: c.id,
-                name: c.name,
-                target_percentage: c.target_percentage,
-                current_percentage: current_percentage,
-                current_balance: c.current_balance,
-                target_balance: target_balance,
-                diff_value: diff_value,
-                status: diff_value > 0 ? 'COMPRAR' : (diff_value < -100 ? 'AGUARDAR' : 'MANTER'),
-                color: c.color || '#cbd5e1'
-            };
-        });
-
-        // 3. MÓDULO DE OBJETIVOS (BUCKETING) - Corrigido para ler target_value como target_amount
+        // 3. MÓDULO DE BUCKETING (METAS - Corrigido nome da coluna para target_value)
         const goalsModule = db.prepare(`
-            SELECT G.id, G.name, G.target_value as target_amount, G.deadline, G.icon,
-                   COALESCE(SUM(A.current_balance), 0) as current_balance
+            SELECT G.name as goal, 
+                   SUM(A.current_balance) as current_amount,
+                   G.target_value as target_amount
             FROM Goals G
             LEFT JOIN Assets A ON A.goal_id = G.id AND A.status = 'active'
             GROUP BY G.id
         `).all();
 
-        // 4. DISTRIBUIÇÃO GERAL (PIZZA)
+        // 4. DISTRIBUIÇÃO GERAL (PIZZA DE ATIVOS E DÍVIDAS)
         const fundos = db.prepare(`
             SELECT A.name as nome, 
                    COALESCE(C.name, 'Sem Classe') as tipo, 
@@ -78,6 +60,25 @@ router.get('/', (req, res) => {
             FROM Loans WHERE status = 'active' AND installments_paid < installments_total
         `).all();
 
+        // ==========================================================
+        // 5. NOVOS MÓDULOS DE BI (MÁQUINA DO TEMPO / EVOLUÇÃO)
+        // ==========================================================
+        
+        // Histórico completo de investimentos para o Gráfico de Evolução
+        const evolutionInvestments = db.prepare(`
+            SELECT EH.date, EH.amount, EH.type, EH.asset_id, A.name as asset_name
+            FROM EquityHistory EH
+            JOIN Assets A ON EH.asset_id = A.id
+            WHERE EH.type IN ('contribution', 'withdrawal', 'dividend')
+            ORDER BY EH.date ASC
+        `).all();
+
+        // Contratos ativos para a Projeção de Dívidas (Gráfico Vermelho)
+        const activeLoans = db.prepare(`
+            SELECT * FROM Loans 
+            WHERE status != 'quitted' AND status != 'deleted'
+        `).all();
+
         res.json({ 
             totalAtivos, 
             totalDividas, 
@@ -88,7 +89,9 @@ router.get('/', (req, res) => {
             dividasLabels: dividasDetalhadas.map(d => d.label),
             dividasValores: dividasDetalhadas.map(d => d.valor),
             rebalanceModule,
-            goalsModule
+            goalsModule,
+            evolutionInvestments,
+            activeLoans
         });
     } catch (err) {
         console.error("ERRO GRAVE NO DASHBOARD:", err.message);

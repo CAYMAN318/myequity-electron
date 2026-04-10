@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyEquity - Dashboard V2</title>
+    <title>MyEquity - Dashboard V2 (BI)</title>
     <script src="libs/tailwindcss.js"></script>
     <script src="libs/vue.global.js"></script>
     <script src="libs/lucide.js"></script>
-    <script src="libs/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
@@ -22,200 +22,231 @@
 </head>
 <body class="p-8 text-left">
 
-    <div id="app" class="max-w-7xl mx-auto space-y-8">
+    <div id="app" class="max-w-7xl mx-auto space-y-6">
         
-        <div class="flex justify-between items-end">
+        <!-- CABEÇALHO -->
+        <div class="flex justify-between items-end mb-8">
             <div>
-                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Visão Geral</h1>
-                <p class="text-slate-500 mt-1">Acompanhamento consolidado do seu patrimônio e obrigações.</p>
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Business Intelligence</h1>
+                <p class="text-slate-500 mt-1">Visão global do seu patrimônio, projeções e metas.</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-medium text-slate-500">Patrimônio Líquido (Ativos - Dívidas)</p>
+                <p class="text-3xl font-black text-blue-600 tracking-tight">{{ formatarMoeda(data.totalAtivos - data.totalDividas) }}</p>
             </div>
         </div>
 
-        <!-- TOTAIS (CARDS) -->
+        <!-- ANDAR 1: KPIs GERAIS -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <!-- Ativos -->
-            <div class="card-dash p-6">
-                <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
-                        <span class="icon-wrapper" v-html="getIcon('pie-chart', 28)"></span>
+            <div class="card-dash p-6 border-t-4 border-blue-500">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <span class="icon-wrapper" v-html="getIcon('briefcase')"></span>
                     </div>
-                    <div>
-                        <p class="text-sm font-bold text-slate-500">Patrimônio Bruto</p>
-                        <p class="text-2xl font-black text-slate-800 tracking-tight">{{ formatarMoeda(data.totalAtivos) }}</p>
-                    </div>
+                    <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">Ativos Brutos</p>
                 </div>
+                <p class="text-2xl font-black text-slate-800 mt-2">{{ formatarMoeda(data.totalAtivos) }}</p>
             </div>
 
-            <!-- Dívidas -->
-            <div class="card-dash p-6">
-                <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-rose-50 text-rose-600">
-                        <span class="icon-wrapper" v-html="getIcon('credit-card', 28)"></span>
+            <div class="card-dash p-6 border-t-4 border-rose-500">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                        <span class="icon-wrapper" v-html="getIcon('credit-card')"></span>
                     </div>
-                    <div>
-                        <p class="text-sm font-bold text-slate-500">Obrigações Ativas</p>
-                        <p class="text-2xl font-black text-slate-800 tracking-tight">{{ formatarMoeda(data.totalDividas) }}</p>
-                    </div>
+                    <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">Dívidas & Passivos</p>
                 </div>
+                <p class="text-2xl font-black text-slate-800 mt-2">{{ formatarMoeda(data.totalDividas) }}</p>
             </div>
 
-            <!-- Proventos -->
-            <div class="card-dash p-6">
-                <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-50 text-emerald-600">
-                        <span class="icon-wrapper" v-html="getIcon('trending-up', 28)"></span>
+            <div class="card-dash p-6 border-t-4 border-emerald-500">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                        <span class="icon-wrapper" v-html="getIcon('trending-up')"></span>
                     </div>
-                    <div>
-                        <p class="text-sm font-bold text-slate-500">Proventos Acumulados</p>
-                        <p class="text-2xl font-black text-slate-800 tracking-tight">{{ formatarMoeda(data.totalRendimentos) }}</p>
-                    </div>
+                    <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">Proventos Totais</p>
                 </div>
+                <p class="text-2xl font-black text-slate-800 mt-2">{{ formatarMoeda(data.totalRendimentos) }}</p>
             </div>
 
-            <!-- Impostos -->
-            <div @click="abrirModalImpostos" class="card-dash p-6 cursor-pointer hover:border-orange-300 relative">
-                <!-- Ícone que indica ação de clique -->
-                <div class="absolute top-4 right-4 text-orange-400 opacity-50">
-                    <span class="icon-wrapper" v-html="getIcon('external-link', 16)"></span>
+            <div class="card-dash p-6 border-t-4 border-amber-500 relative cursor-pointer hover:bg-amber-50" @click="abrirModalImpostos">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                            <span class="icon-wrapper" v-html="getIcon('alert-triangle')"></span>
+                        </div>
+                        <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">IR a Recolher</p>
+                    </div>
+                    <span class="icon-wrapper text-amber-300" v-html="getIcon('external-link', 16)"></span>
+                </div>
+                <p class="text-2xl font-black text-amber-600 mt-2">{{ formatarMoeda(data.totalImpostosDevidos) }}</p>
+            </div>
+        </div>
+
+        <!-- ANDAR 2: REBALANCEAMENTO E BUCKETING -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <!-- REBALANCEAMENTO -->
+            <div class="card-dash p-6">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Motor de Rebalanceamento</h3>
+                        <p class="text-xs text-slate-500">Distanciamento das metas ideais por subcategoria.</p>
+                    </div>
+                    <span class="icon-wrapper text-blue-400" v-html="getIcon('sliders', 24)"></span>
                 </div>
                 
-                <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-orange-50 text-orange-600">
-                        <span class="icon-wrapper" v-html="getIcon('file-text', 28)"></span>
+                <div v-if="data.rebalanceModule.length === 0" class="text-center py-6 text-slate-400 text-sm">
+                    Nenhuma subcategoria com meta percentual definida.
+                </div>
+
+                <div class="space-y-4">
+                    <div v-for="(cat, idx) in rebalanceCalculado" :key="idx">
+                        <div class="flex justify-between text-xs font-bold mb-1">
+                            <span class="text-slate-700">{{ cat.category }}</span>
+                            <span :class="cat.statusColor">{{ cat.pctAtual.toFixed(1) }}% / {{ cat.target_pct }}% (Alvo)</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" :style="{ width: Math.min(cat.pctAtual, 100) + '%', backgroundColor: cat.barColor }"></div>
+                        </div>
+                        <p class="text-[10px] text-right mt-1" :class="cat.statusColor">
+                            {{ cat.recomendacao }} {{ formatarMoeda(Math.abs(cat.diferencaFinanceira)) }}
+                        </p>
                     </div>
+                </div>
+            </div>
+
+            <!-- BUCKETING (METAS) -->
+            <div class="card-dash p-6">
+                <div class="flex justify-between items-end mb-6">
                     <div>
-                        <p class="text-sm font-bold text-slate-500">Provisão de Impostos</p>
-                        <p class="text-2xl font-black text-slate-800 tracking-tight">{{ formatarMoeda(data.totalImpostosDevidos) }}</p>
+                        <h3 class="text-lg font-bold text-slate-800">Objetivos Financeiros (Bucketing)</h3>
+                        <p class="text-xs text-slate-500">Progresso do capital alocado para cada meta de vida.</p>
+                    </div>
+                    <span class="icon-wrapper text-emerald-400" v-html="getIcon('target', 24)"></span>
+                </div>
+
+                <div v-if="data.goalsModule.length === 0" class="text-center py-6 text-slate-400 text-sm">
+                    Nenhum ativo alocado em metas específicas.
+                </div>
+
+                <div class="space-y-4">
+                    <div v-for="(goal, idx) in data.goalsModule" :key="idx" v-show="goal.target_amount > 0">
+                        <div class="flex justify-between text-xs font-bold mb-1">
+                            <span class="text-slate-700">{{ goal.goal }}</span>
+                            <span class="text-emerald-600">{{ formatarMoeda(goal.current_amount) }} / {{ formatarMoeda(goal.target_amount) }}</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill bg-emerald-500" :style="{ width: Math.min((goal.current_amount / goal.target_amount) * 100, 100) + '%' }"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 text-right mt-1">
+                            {{ ((goal.current_amount / goal.target_amount) * 100).toFixed(1) }}% concluído
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- GRÁFICOS PIZZA -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Distribuição de Ativos -->
+        <!-- ANDAR 3: DISTRIBUIÇÃO (PIZZAS) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             <div class="card-dash p-6 relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">Composição do Patrimônio</h3>
-                <p class="text-xs text-slate-500 mb-6">Divisão por classes e ativos específicos.</p>
+                <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">Concentração de Ativos</h3>
                 <div class="relative h-64 w-full flex justify-center items-center">
                     <canvas id="ativosPieChart"></canvas>
                 </div>
             </div>
-            
-            <!-- Distribuição de Dívidas -->
+
             <div class="card-dash p-6 relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">Composição de Dívidas</h3>
-                <p class="text-xs text-slate-500 mb-6">Visão do saldo devedor atual de cada obrigação.</p>
+                <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">Concentração de Passivos</h3>
                 <div class="relative h-64 w-full flex justify-center items-center">
                     <canvas id="dividasPieChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- MÓDULOS DE ACOMPANHAMENTO: REBALANCEAMENTO E OBJETIVOS -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Rebalanceamento -->
-            <div class="card-dash p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <span class="icon-wrapper text-blue-500" v-html="getIcon('sliders')"></span> Rebalanceamento
-                    </h3>
+        <!-- ANDAR 4: MÁQUINA DO TEMPO (NOVO BI) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            
+            <!-- EVOLUÇÃO DE INVESTIMENTOS -->
+            <div class="card-dash p-6 relative">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Evolução de Patrimônio & Receitas</h3>
+                        <p class="text-xs text-slate-500">Histórico no tempo.</p>
+                    </div>
+                    <div class="flex flex-col gap-2 items-end">
+                        <!-- Filtro de Ativo -->
+                        <select v-model="filtroAtivoEvolucao" @change="renderEvolucaoInvestimentos" class="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 max-w-[180px] truncate">
+                            <option value="global">🌍 Visão Global (Todos)</option>
+                            <option v-for="ativo in listaAtivosParaFiltro" :key="ativo.id" :value="ativo.id">
+                                🎯 {{ ativo.name }}
+                            </option>
+                        </select>
+                        
+                        <!-- Toggle Aporte/Receita -->
+                        <div class="flex bg-slate-100 p-1 rounded-lg">
+                            <button @click="tipoVisaoEvolucao = 'aportes'; renderEvolucaoInvestimentos()" class="px-3 py-1 text-xs font-bold rounded-md transition-all" :class="tipoVisaoEvolucao === 'aportes' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'">Aportes</button>
+                            <button @click="tipoVisaoEvolucao = 'receitas'; renderEvolucaoInvestimentos()" class="px-3 py-1 text-xs font-bold rounded-md transition-all" :class="tipoVisaoEvolucao === 'receitas' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'">Receitas</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="space-y-4">
-                    <div v-if="!data.rebalanceModule.length" class="text-center py-4 text-sm text-slate-400">
-                        Nenhuma classe configurada para rebalanceamento.
-                    </div>
-                    <div v-for="item in data.rebalanceModule" :key="item.id" class="border border-slate-100 p-4 rounded-xl">
-                        <div class="flex justify-between items-end mb-2">
-                            <div>
-                                <p class="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                    <span class="w-3 h-3 rounded-full" :style="{ backgroundColor: item.color }"></span>
-                                    {{ item.name }}
-                                </p>
-                                <p class="text-xs text-slate-500 mt-1">Alvo: {{ item.target_percentage }}% | Atual: {{ item.current_percentage.toFixed(1) }}%</p>
-                            </div>
-                            <div class="text-right">
-                                <span v-if="item.status === 'COMPRAR'" class="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-700">COMPRAR</span>
-                                <span v-else-if="item.status === 'AGUARDAR'" class="text-xs font-bold px-2 py-1 rounded bg-orange-100 text-orange-700">AGUARDAR</span>
-                                <span v-else class="text-xs font-bold px-2 py-1 rounded bg-emerald-100 text-emerald-700">MANTER</span>
-                            </div>
-                        </div>
-                        <div class="progress-bar-bg mt-3">
-                            <div class="progress-bar-fill" :style="{ width: Math.min(item.current_percentage, 100) + '%', backgroundColor: item.color }"></div>
-                        </div>
-                    </div>
+                <div class="relative h-72 w-full">
+                    <canvas id="evolucaoInvestChart"></canvas>
                 </div>
             </div>
 
-            <!-- Objetivos -->
-            <div class="card-dash p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <span class="icon-wrapper text-indigo-500" v-html="getIcon('target')"></span> Meus Objetivos
-                    </h3>
+            <!-- PROJEÇÃO DE DÍVIDAS -->
+            <div class="card-dash p-6 relative border-t-4 border-rose-500">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Projeção de Quitação (Passivos)</h3>
+                        <p class="text-xs text-slate-500">Previsão da queda do Custo Mensal no futuro.</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm">
+                        <span class="icon-wrapper" v-html="getIcon('calendar', 20)"></span>
+                    </div>
                 </div>
-                <div class="space-y-4">
-                    <div v-if="!data.goalsModule.length" class="text-center py-4 text-sm text-slate-400">
-                        Nenhum objetivo definido ainda.
-                    </div>
-                    <div v-for="goal in data.goalsModule" :key="goal.id" class="border border-slate-100 p-4 rounded-xl">
-                        <div class="flex justify-between items-end mb-2">
-                            <div>
-                                <p class="font-bold text-slate-800 text-sm">{{ goal.icon }} {{ goal.name }}</p>
-                                <p class="text-xs text-slate-500 mt-1">{{ formatarMoeda(goal.current_balance) }} de {{ formatarMoeda(goal.target_amount) }}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-xs font-bold text-indigo-600">{{ ((goal.current_balance / goal.target_amount) * 100).toFixed(1) }}%</p>
-                            </div>
-                        </div>
-                        <div class="progress-bar-bg mt-3">
-                            <div class="progress-bar-fill bg-indigo-500" :style="{ width: Math.min((goal.current_balance / goal.target_amount) * 100, 100) + '%' }"></div>
-                        </div>
-                    </div>
+                <div class="relative h-72 w-full">
+                    <canvas id="evolucaoDividasChart"></canvas>
                 </div>
             </div>
+
         </div>
 
-        <!-- Módulo de Impostos (Gaveta da Receita) -->
+        <!-- MODAL IMPOSTOS (Mantido) -->
         <div v-if="modalImpostos.aberto" @click.self="fecharModalImpostos" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-            <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-orange-50">
+            <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                <div class="p-6 border-b border-amber-100 flex justify-between items-center bg-amber-50">
                     <div>
-                        <h2 class="text-xl font-bold flex items-center gap-2 text-orange-700">
-                            <span class="icon-wrapper" v-html="getIcon('file-text')"></span>
-                            DARFs Pendentes
+                        <h2 class="text-xl font-bold flex items-center gap-2 text-amber-700">
+                            <span class="icon-wrapper" v-html="getIcon('alert-triangle')"></span>
+                            Imposto de Renda (Provisão)
                         </h2>
-                        <p class="text-sm mt-1 text-orange-600">Vendas com lucro que geraram provisão de IR.</p>
+                        <p class="text-sm mt-1 text-amber-600">Histórico de tributos gerados por vendas com lucro.</p>
                     </div>
-                    <button @click="fecharModalImpostos" class="text-orange-400 hover:text-orange-600 p-2 rounded-full hover:bg-orange-100 transition-colors">
+                    <button @click="fecharModalImpostos" class="text-amber-400 hover:text-amber-600 transition-colors">
                         <span class="icon-wrapper" v-html="getIcon('x')"></span>
                     </button>
                 </div>
-                <div class="p-6 space-y-3 overflow-y-auto custom-scrollbar bg-slate-50 flex-grow">
-                    
-                    <div v-if="data.impostosDetalhados && data.impostosDetalhados.length === 0" class="text-center py-8 text-slate-400">
-                        <span class="icon-wrapper mb-2 opacity-50" v-html="getIcon('check-circle', 32)"></span>
-                        <p class="text-sm">Nenhum imposto pendente no momento. Ufa!</p>
+                
+                <div class="overflow-y-auto custom-scrollbar flex-grow p-6 bg-slate-50">
+                    <div v-if="data.impostosDetalhados.length === 0" class="text-center py-12 text-slate-400">
+                        <span class="icon-wrapper mb-2 opacity-50" v-html="getIcon('check-circle', 48)"></span>
+                        <p>Nenhuma provisão de imposto pendente no momento.</p>
                     </div>
 
-                    <div v-for="imp in data.impostosDetalhados" :key="imp.id" class="bg-white p-4 rounded-xl border border-orange-100 flex justify-between items-center shadow-sm">
-                        <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-orange-100 text-orange-600">
-                                <span class="icon-wrapper" v-html="getIcon('alert-triangle', 20)"></span>
-                            </div>
+                    <div v-else class="space-y-3">
+                        <div v-for="imp in data.impostosDetalhados" :key="imp.id" class="bg-white border border-amber-200 rounded-2xl p-4 flex justify-between items-center shadow-sm">
                             <div>
-                                <p class="text-sm font-bold text-slate-800">{{ imp.asset_name }}</p>
-                                <p class="text-xs text-slate-500">Venda: {{ imp.date ? imp.date.split('-').reverse().join('/') : '' }}</p>
+                                <p class="text-sm font-bold text-slate-800">Venda: {{ imp.asset_name }}</p>
+                                <p class="text-xs text-slate-500 font-medium">{{ imp.date ? imp.date.split('-').reverse().join('/') : '' }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-base font-black text-amber-600">
+                                    {{ formatarMoeda(imp.ir_devido) }}
+                                </p>
+                                <p class="text-[10px] text-slate-400 mt-1">Bruto: {{ formatarMoeda(imp.valor_venda) }}</p>
                             </div>
                         </div>
-                        <div class="text-right flex flex-col items-end">
-                            <p class="text-xs text-slate-500 mb-1">IR Devido</p>
-                            <p class="text-sm font-bold text-rose-600">
-                                {{ formatarMoeda(imp.ir_devido) }}
-                            </p>
-                        </div>
                     </div>
-
                 </div>
             </div>
         </div>
@@ -223,113 +254,265 @@
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+        let chartAtivosObj = null;
+        let chartDividasObj = null;
+        let chartEvolucaoInvestObj = null;
+        let chartEvolucaoDividasObj = null;
 
         createApp({
             setup() {
                 const data = ref({
-                    totalAtivos: 0,
-                    totalDividas: 0,
-                    totalRendimentos: 0,
-                    totalImpostosDevidos: 0,
-                    impostosDetalhados: [],
-                    distribuicaoAtivos: [],
-                    distribuicaoDividas: { labels: [], valores: [] },
-                    rebalanceModule: [],
-                    goalsModule: []
+                    totalAtivos: 0, totalDividas: 0, totalRendimentos: 0, totalImpostosDevidos: 0,
+                    impostosDetalhados: [], rebalanceModule: [], goalsModule: [],
+                    distribuicaoAtivos: [], distribuicaoDividas: { labels: [], valores: [] },
+                    evolutionInvestments: [], activeLoans: []
                 });
 
                 const modalImpostos = ref({ aberto: false });
+                
+                const filtroAtivoEvolucao = ref('global');
+                const tipoVisaoEvolucao = ref('aportes');
+
+                const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+                const getIcon = (n, s=24) => { try { return lucide.icons[n].toSvg({width:s, height:s}); } catch(e) { return ""; } };
+
                 const abrirModalImpostos = () => { modalImpostos.value.aberto = true; };
                 const fecharModalImpostos = () => { modalImpostos.value.aberto = false; };
 
-                const formatarMoeda = (valor) => {
-                    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
-                };
+                const rebalanceCalculado = computed(() => {
+                    if (!data.value.totalAtivos || data.value.totalAtivos === 0) return [];
+                    
+                    return data.value.rebalanceModule.map(cat => {
+                        const pctAtual = (cat.current_amount / data.value.totalAtivos) * 100;
+                        const pctAlvo = cat.target_pct;
+                        const diferencaPct = pctAtual - pctAlvo;
+                        const diferencaFinanceira = (diferencaPct / 100) * data.value.totalAtivos;
+                        
+                        let recomendacao = "Balanceado";
+                        let statusColor = "text-slate-500";
+                        let barColor = "#94a3b8";
 
-                const getIcon = (name, size=18) => { 
-                    try { 
-                        const n = name.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
-                        return lucide.icons[n].toSvg({width:size,height:size}); 
-                    } catch(e) { return ""; } 
-                };
+                        if (diferencaPct > 2) {
+                            recomendacao = "Sobre-alocado. Segure aportes.";
+                            statusColor = "text-rose-500";
+                            barColor = "#f43f5e";
+                        } else if (diferencaPct < -2) {
+                            recomendacao = "Sub-alocado. Aporte sugerido:";
+                            statusColor = "text-blue-500";
+                            barColor = "#3b82f6";
+                        } else {
+                            statusColor = "text-emerald-500";
+                            barColor = "#10b981";
+                        }
 
-                const initCharts = () => {
-                    // Pie Chart - Ativos
-                    const ctxAtivos = document.getElementById('ativosPieChart');
-                    if(ctxAtivos && data.value.distribuicaoAtivos.length > 0) {
-                        new Chart(ctxAtivos, {
-                            type: 'doughnut',
-                            data: {
-                                labels: data.value.distribuicaoAtivos.map(d => d.nome),
-                                datasets: [{
-                                    data: data.value.distribuicaoAtivos.map(d => d.saldo),
-                                    backgroundColor: data.value.distribuicaoAtivos.map(d => d.cor),
-                                    borderWidth: 0,
-                                    hoverOffset: 4
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                cutout: '70%',
-                                plugins: {
-                                    legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 11 } } },
-                                    tooltip: { callbacks: { label: function(context) { return ' ' + formatarMoeda(context.parsed); } } }
-                                }
-                            }
-                        });
-                    }
+                        return { ...cat, pctAtual, diferencaPct, diferencaFinanceira, recomendacao, statusColor, barColor };
+                    });
+                });
 
-                    // Pie Chart - Dívidas
-                    const ctxDividas = document.getElementById('dividasPieChart');
-                    if(ctxDividas && data.value.distribuicaoDividas.labels.length > 0) {
-                        new Chart(ctxDividas, {
-                            type: 'doughnut',
-                            data: {
-                                labels: data.value.distribuicaoDividas.labels,
-                                datasets: [{
-                                    data: data.value.distribuicaoDividas.valores,
-                                    backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981'],
-                                    borderWidth: 0,
-                                    hoverOffset: 4
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                cutout: '70%',
-                                plugins: {
-                                    legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 11 } } },
-                                    tooltip: { callbacks: { label: function(context) { return ' ' + formatarMoeda(context.parsed); } } }
-                                }
-                            }
-                        });
-                    }
-                };
+                const listaAtivosParaFiltro = computed(() => {
+                    const map = new Map();
+                    data.value.evolutionInvestments.forEach(item => {
+                        if(item.asset_id && item.asset_name) {
+                            map.set(item.asset_id, item.asset_name);
+                        }
+                    });
+                    return Array.from(map, ([id, name]) => ({id, name})).sort((a,b) => a.name.localeCompare(b.name));
+                });
 
                 const carregarDados = async () => {
                     try {
-                        const response = await fetch('http://localhost:3001/api/dashboard-patrimonial');
-                        const result = await response.json();
+                        // AQUI ESTAVA A DIVERGÊNCIA DE ROTAS! AGORA APONTA PARA dashboard-patrimonial
+                        const res = await fetch('http://localhost:3001/api/dashboard-patrimonial');
+                        const result = await res.json();
                         
                         data.value.totalAtivos = result.totalAtivos || 0;
                         data.value.totalDividas = result.totalDividas || 0;
                         data.value.totalRendimentos = result.totalRendimentos || 0;
                         data.value.totalImpostosDevidos = result.totalImpostosDevidos || 0;
                         data.value.impostosDetalhados = result.impostosDetalhados || [];
-                        
                         data.value.rebalanceModule = result.rebalanceModule || [];
                         data.value.goalsModule = result.goalsModule || [];
-
                         data.value.distribuicaoAtivos = result.fundos || [];
-                        data.value.distribuicaoDividas = {
-                            labels: result.dividasLabels || [],
-                            valores: result.dividasValores || []
-                        };
+                        data.value.distribuicaoDividas = { labels: result.dividasLabels || [], valores: result.dividasValores || [] };
+                        
+                        data.value.evolutionInvestments = result.evolutionInvestments || [];
+                        data.value.activeLoans = result.activeLoans || [];
 
-                        initCharts();
+                        nextTick(() => {
+                            initPizzas();
+                            renderEvolucaoInvestimentos();
+                            renderEvolucaoDividas();
+                        });
                     } catch (e) { console.error("Erro ao carregar dashboard:", e); }
+                };
+
+                const initPizzas = () => {
+                    const ctxAtivos = document.getElementById('ativosPieChart');
+                    if (ctxAtivos && data.value.distribuicaoAtivos.length > 0) {
+                        if (chartAtivosObj) chartAtivosObj.destroy();
+                        chartAtivosObj = new Chart(ctxAtivos, {
+                            type: 'doughnut',
+                            data: {
+                                labels: data.value.distribuicaoAtivos.map(d => d.nome),
+                                datasets: [{
+                                    data: data.value.distribuicaoAtivos.map(d => d.saldo),
+                                    backgroundColor: data.value.distribuicaoAtivos.map(d => d.cor),
+                                    borderWidth: 0, hoverOffset: 4
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } }, tooltip: { callbacks: { label: function(c) { return ` ${formatarMoeda(c.raw)}`; } } } } }
+                        });
+                    }
+
+                    const ctxDividas = document.getElementById('dividasPieChart');
+                    if (ctxDividas && data.value.distribuicaoDividas.labels.length > 0) {
+                        if (chartDividasObj) chartDividasObj.destroy();
+                        chartDividasObj = new Chart(ctxDividas, {
+                            type: 'doughnut',
+                            data: {
+                                labels: data.value.distribuicaoDividas.labels,
+                                datasets: [{
+                                    data: data.value.distribuicaoDividas.valores,
+                                    backgroundColor: ['#f43f5e', '#fb923c', '#f59e0b', '#8b5cf6', '#06b6d4'],
+                                    borderWidth: 0, hoverOffset: 4
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } }, tooltip: { callbacks: { label: function(c) { return ` ${formatarMoeda(c.raw)}`; } } } } }
+                        });
+                    }
+                };
+
+                const renderEvolucaoInvestimentos = () => {
+                    const ctxEv = document.getElementById('evolucaoInvestChart');
+                    if (!ctxEv) return;
+                    if (chartEvolucaoInvestObj) chartEvolucaoInvestObj.destroy();
+
+                    let rawData = data.value.evolutionInvestments;
+                    if (filtroAtivoEvolucao.value !== 'global') {
+                        rawData = rawData.filter(r => r.asset_id == filtroAtivoEvolucao.value);
+                    }
+
+                    const groupedData = {};
+                    let acumuladoAportes = 0;
+                    let acumuladoReceitas = 0;
+
+                    rawData.forEach(row => {
+                        if (!row.date) return;
+                        const [year, month] = row.date.split('-');
+                        const key = `${month}/${year.slice(-2)}`;
+                        
+                        if (!groupedData[key]) {
+                            groupedData[key] = { label: key, aporteMes: 0, resgateMes: 0, proventoMes: 0, dataSort: new Date(`20${year.slice(-2)}-${month}-01`) };
+                        }
+                        
+                        if (row.type === 'contribution') groupedData[key].aporteMes += row.amount;
+                        if (row.type === 'withdrawal') groupedData[key].resgateMes += row.amount;
+                        if (row.type === 'dividend') groupedData[key].proventoMes += row.amount;
+                    });
+
+                    const timeline = Object.values(groupedData).sort((a, b) => a.dataSort - b.dataSort);
+
+                    timeline.forEach(t => {
+                        acumuladoAportes += (t.aporteMes - t.resgateMes);
+                        acumuladoReceitas += t.proventoMes;
+                        t.aporteAcumulado = Math.max(0, acumuladoAportes);
+                        t.receitaAcumulada = acumuladoReceitas;
+                    });
+
+                    const isAportes = tipoVisaoEvolucao.value === 'aportes';
+                    
+                    chartEvolucaoInvestObj = new Chart(ctxEv, {
+                        type: 'bar',
+                        data: {
+                            labels: timeline.map(t => t.label),
+                            datasets: [
+                                {
+                                    type: 'line',
+                                    label: isAportes ? 'Acumulado Histórico' : 'Proventos Acumulados',
+                                    data: timeline.map(t => isAportes ? t.aporteAcumulado : t.receitaAcumulada),
+                                    borderColor: isAportes ? '#3b82f6' : '#10b981',
+                                    backgroundColor: isAportes ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                    borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y'
+                                },
+                                {
+                                    type: 'bar',
+                                    label: isAportes ? 'Aporte Físico no Mês' : 'Proventos do Mês',
+                                    data: timeline.map(t => isAportes ? t.aporteMes : t.proventoMes),
+                                    backgroundColor: isAportes ? '#bfdbfe' : '#a7f3d0',
+                                    borderRadius: 4, yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
+                            scales: {
+                                x: { grid: { display: false } },
+                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { display: false } },
+                                y1: { type: 'linear', display: false, position: 'right', grid: { display: false } }
+                            },
+                            plugins: {
+                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
+                                tooltip: { callbacks: { label: function(c) { return ` ${c.dataset.label}: ${formatarMoeda(c.raw)}`; } } }
+                            }
+                        }
+                    });
+                };
+
+                const renderEvolucaoDividas = () => {
+                    const ctxDiv = document.getElementById('evolucaoDividasChart');
+                    if (!ctxDiv || data.value.activeLoans.length === 0) return;
+                    if (chartEvolucaoDividasObj) chartEvolucaoDividasObj.destroy();
+
+                    const dividasAtivas = data.value.activeLoans;
+                    const maxMesesRestantes = Math.max(...dividasAtivas.map(d => d.installments_total - d.installments_paid), 0);
+                    let limit = Math.max(Math.min(maxMesesRestantes, 120), 12); 
+                    
+                    const labelsLinha = [];
+                    const dataLinha = [];
+                    const dataHoje = new Date();
+                    const passo = limit > 24 ? Math.ceil(limit / 24) : 1; 
+
+                    for (let i = 0; i <= limit; i += passo) {
+                        const d = new Date(dataHoje.getFullYear(), dataHoje.getMonth() + i, 1);
+                        labelsLinha.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
+                        
+                        let somaMesFuturo = 0;
+                        dividasAtivas.forEach(loan => {
+                            const remanescentes = loan.installments_total - loan.installments_paid;
+                            if (remanescentes > i) {
+                                somaMesFuturo += loan.monthly_payment;
+                            }
+                        });
+                        dataLinha.push(somaMesFuturo);
+                    }
+
+                    chartEvolucaoDividasObj = new Chart(ctxDiv, {
+                        type: 'line',
+                        data: {
+                            labels: labelsLinha,
+                            datasets: [{
+                                label: 'Custo Mensal Global',
+                                data: dataLinha,
+                                borderColor: '#f43f5e',
+                                backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                                borderWidth: 3, fill: true, tension: 0.3
+                            }]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            scales: {
+                                x: { grid: { display: false } },
+                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + val.toLocaleString('pt-BR') } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: { callbacks: { label: function(c) { return ' ' + formatarMoeda(c.raw); } } }
+                            }
+                        }
+                    });
                 };
 
                 onMounted(() => {
@@ -339,12 +522,11 @@
 
                 return { 
                     data, 
-                    modalImpostos,
-                    abrirModalImpostos,
-                    fecharModalImpostos,
-                    formatarMoeda, 
-                    getIcon, 
-                    carregarDados 
+                    modalImpostos, abrirModalImpostos, fecharModalImpostos,
+                    formatarMoeda, getIcon, carregarDados,
+                    rebalanceCalculado,
+                    filtroAtivoEvolucao, tipoVisaoEvolucao, listaAtivosParaFiltro,
+                    renderEvolucaoInvestimentos
                 };
             }
         }).mount('#app');

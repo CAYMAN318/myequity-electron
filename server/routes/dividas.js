@@ -19,33 +19,28 @@ router.post('/', (req, res) => {
     const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
     
     try {
-        const insertTransaction = db.transaction(() => {
+        db.transaction(() => {
             // 1. Cria o contrato principal
             const result = db.prepare(`
                 INSERT INTO Loans (description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `).run(description, total_principal, interest_rate, installments_total, installments_paid || 0, monthly_payment || 0, start_date, is_payroll_deductible ? 1 : 0);
             
-            const newLoanId = result.lastInsertRowid;
-
-            // 2. Se o usuário já informou que pagou parcelas, cria uma linha consolidada no Extrato
-            if (installments_paid > 0 && monthly_payment > 0) {
-                const valorConsolidado = installments_paid * monthly_payment;
-                
+            // 2. Se já tem parcelas pagas, gera um "Saldo Inicial" no extrato com o valor amortizado puro
+            if (installments_paid > 0) {
+                const amortizacaoPura = total_principal / installments_total;
                 db.prepare(`
-                    INSERT INTO EquityHistory (loan_id, type, amount, quantity, interest_saved, date) 
-                    VALUES (?, 'initial_balance', ?, ?, 0, ?)
-                `).run(newLoanId, valorConsolidado, installments_paid, start_date);
+                    INSERT INTO EquityHistory (loan_id, type, amount, quantity, date)
+                    VALUES (?, 'initial_balance', ?, ?, ?)
+                `).run(result.lastInsertRowid, amortizacaoPura * installments_paid, installments_paid, start_date);
             }
-        });
-
-        insertTransaction();
+        })();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ============================================================================
-// 3. ATUALIZAR CONTRATO EXISTENTE
+// 3. EDITAR CONTRATO EXISTENTE
 // ============================================================================
 router.put('/:id', (req, res) => {
     const { description, total_principal, interest_rate, installments_total, installments_paid, monthly_payment, start_date, is_payroll_deductible } = req.body;
@@ -60,70 +55,65 @@ router.put('/:id', (req, res) => {
 });
 
 // ============================================================================
-// 4. EXCLUIR CONTRATO E SEU HISTÓRICO (Delete Real)
+// 4. EXCLUIR CONTRATO (Soft Delete e limpa histórico)
 // ============================================================================
 router.delete('/:id', (req, res) => {
     try {
-        // Agora também limpa o histórico associado para não deixar lixo no banco
         db.transaction(() => {
+            db.prepare("UPDATE Loans SET status = 'deleted' WHERE id = ?").run(req.params.id);
             db.prepare("DELETE FROM EquityHistory WHERE loan_id = ?").run(req.params.id);
-            db.prepare("DELETE FROM Loans WHERE id = ?").run(req.params.id);
         })();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ============================================================================
-// 5. REGISTRAR PAGAMENTO / AMORTIZAÇÃO (Calcula Abatimento de Juros)
+// 5. AMORTIZAR PARCELA (LÓGICA CORRIGIDA COM A MATEMÁTICA PURA)
 // ============================================================================
 router.post('/amortize', (req, res) => {
     const { loan_id, quantity, is_early_payment } = req.body;
     
     try {
-        const loan = db.prepare("SELECT * FROM Loans WHERE id = ?").get(loan_id);
-        if (!loan) return res.status(404).json({ error: "Contrato não encontrado." });
-
-        const parcelasParaPagar = parseInt(quantity) || 1;
-        let valorPago = 0;
-        let jurosPoupados = 0;
-
-        if (is_early_payment) {
-            const numeroDeParcelasEstimados = loan.monthly_payment > 0 
-                                            ? Math.floor(loan.total_principal / loan.monthly_payment) 
-                                            : loan.installments_total;
-            
-            const amortizacaoPura = numeroDeParcelasEstimados > 0 
-                                    ? (loan.total_principal / numeroDeParcelasEstimados) 
-                                    : (loan.total_principal / loan.installments_total);
-            
-            valorPago = amortizacaoPura * parcelasParaPagar;
-            jurosPoupados = (loan.monthly_payment - amortizacaoPura) * parcelasParaPagar; 
-        } else {
-            valorPago = loan.monthly_payment * parcelasParaPagar;
-            jurosPoupados = 0;
-        }
-
-        const novasParcelasPagas = loan.installments_paid + parcelasParaPagar;
-        const novoStatus = novasParcelasPagas >= loan.installments_total ? 'quitted' : 'active';
-
-        const transaction = db.transaction(() => {
-            db.prepare("UPDATE Loans SET installments_paid = ?, status = ? WHERE id = ?").run(novasParcelasPagas, novoStatus, loan_id);
-            
-            db.prepare(`
-                INSERT INTO EquityHistory (loan_id, type, amount, quantity, interest_saved, date) 
-                VALUES (?, 'loan_payment', ?, ?, ?, ?)
-            `).run(loan_id, valorPago, parcelasParaPagar, jurosPoupados, new Date().toISOString().split('T')[0]);
-        });
+        let amountPago = 0;
+        let jurosPoupado = 0;
         
-        transaction();
+        db.transaction(() => {
+            const loan = db.prepare("SELECT * FROM Loans WHERE id = ?").get(loan_id);
+            if (!loan) throw new Error("Contrato não encontrado.");
 
-        res.json({ 
-            success: true, 
-            pago: valorPago, 
-            poupado: jurosPoupados, 
-            quantidade: parcelasParaPagar,
-            quitado: novoStatus === 'quitted'
-        });
+            // FÓRMULA CORRETA: O valor puro da parcela da dívida (Principal ÷ Total de Parcelas)
+            const amortizacaoPura = loan.total_principal / loan.installments_total;
+
+            if (is_early_payment) {
+                // Ao antecipar, você paga APENAS a amortização pura (sem os juros).
+                amountPago = amortizacaoPura * quantity; 
+                
+                // O que você teria que pagar de verdade se não antecipasse:
+                const valorComJuros = loan.monthly_payment * quantity; 
+                
+                // A economia é a diferença:
+                jurosPoupado = Math.max(0, valorComJuros - amountPago); 
+            } else {
+                // Pagamento normal da prestação cheia (inclui os juros do mês)
+                amountPago = loan.monthly_payment * quantity;
+                jurosPoupado = 0;
+            }
+
+            // Registra o pagamento no histórico (Extrato)
+            db.prepare(`
+                INSERT INTO EquityHistory (loan_id, type, amount, quantity, interest_saved, date)
+                VALUES (?, 'loan_payment', ?, ?, ?, date('now', 'localtime'))
+            `).run(loan_id, amountPago, quantity, jurosPoupado);
+
+            // Atualiza as parcelas pagas no contrato
+            const novasPagas = loan.installments_paid + quantity;
+            const novoStatus = novasPagas >= loan.installments_total ? 'quitted' : 'active';
+
+            db.prepare("UPDATE Loans SET installments_paid = ?, status = ? WHERE id = ?").run(novasPagas, novoStatus, loan_id);
+        })();
+
+        // Devolve os dados certinhos para a tela avisar o usuário
+        res.json({ pago: amountPago, poupado: jurosPoupado, quantidade: quantity });
 
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -143,19 +133,21 @@ router.get('/history/:id', (req, res) => {
 // ============================================================================
 router.delete('/history/:id', (req, res) => {
     try {
-        const historyItem = db.prepare("SELECT * FROM EquityHistory WHERE id = ?").get(req.params.id);
-        if (!historyItem) return res.status(404).json({ error: "Registro não encontrado." });
+        db.transaction(() => {
+            const historyItem = db.prepare("SELECT * FROM EquityHistory WHERE id = ?").get(req.params.id);
+            if (!historyItem) throw new Error("Registro não encontrado.");
 
-        if (historyItem.type === 'loan_payment' || historyItem.type === 'initial_balance') {
-            db.prepare(`
-                UPDATE Loans 
-                SET installments_paid = MAX(0, installments_paid - ?),
-                    status = 'active'
-                WHERE id = ?
-            `).run(historyItem.quantity || 1, historyItem.loan_id);
-        }
+            if (historyItem.type === 'loan_payment' || historyItem.type === 'initial_balance') {
+                db.prepare(`
+                    UPDATE Loans 
+                    SET installments_paid = MAX(0, installments_paid - ?),
+                        status = 'active'
+                    WHERE id = ?
+                `).run(historyItem.quantity || 1, historyItem.loan_id);
+            }
 
-        db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
+            db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
+        })();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });

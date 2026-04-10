@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyEquity - Gestão de Dívidas V2</title>
     
+    <!-- Bibliotecas Locais -->
     <script src="libs/tailwindcss.js"></script>
     <script src="libs/vue.global.js"></script>
     <script src="libs/lucide.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js foi removido, pois os gráficos agora moram no Dashboard (BI) -->
 
     <style>
         body { 
@@ -96,6 +97,7 @@
                 <p class="text-slate-500 text-sm mt-1">Você não possui financiamentos ou empréstimos ativos no momento.</p>
             </div>
 
+            <!-- CARDS DE DÍVIDAS (INTACTOS) -->
             <div v-for="loan in dividas" :key="loan.id" class="loan-card p-6" :class="loan.status === 'quitted' ? 'opacity-60 grayscale hover:grayscale-0' : ''">
                 <div>
                     <div class="flex justify-between items-start mb-4">
@@ -152,6 +154,7 @@
                     </div>
                 </div>
 
+                <!-- BOTÕES DUPLOS (Pagar e Extrato) -->
                 <div v-if="loan.status !== 'quitted'" class="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                     <button @click="abrirAmortizacao(loan)" class="py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs rounded-xl transition-colors flex justify-center items-center gap-1">
                         <span class="icon-wrapper" v-html="getIcon('dollar-sign', 14)"></span> Pagamento
@@ -161,6 +164,7 @@
                     </button>
                 </div>
                 
+                <!-- Extrato para dívidas quitadas -->
                 <div v-if="loan.status === 'quitted'" class="mt-4 pt-4 border-t border-slate-100">
                     <button @click="abrirExtrato(loan)" class="w-full py-2.5 bg-slate-50 text-slate-700 hover:bg-slate-100 font-bold text-xs rounded-xl transition-colors flex justify-center items-center gap-1 border border-slate-200">
                         <span class="icon-wrapper" v-html="getIcon('history', 14)"></span> Ver Extrato Final
@@ -169,24 +173,7 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">Distribuição de Dívidas</h3>
-                <p class="text-xs text-slate-500 mb-6">Proporção do seu saldo devedor atual.</p>
-                <div class="relative h-64 w-full flex justify-center items-center">
-                    <canvas id="dividasPieChart"></canvas>
-                </div>
-            </div>
-
-            <div class="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">Linha do Tempo dos Compromissos</h3>
-                <p class="text-xs text-slate-500 mb-6">Previsão da queda do seu Custo Mensal à medida que os contratos chegam ao fim.</p>
-                <div class="relative h-64 w-full">
-                    <canvas id="linhaTempoChart"></canvas>
-                </div>
-            </div>
-        </div>
-
+        <!-- MODAL NOVO/EDITAR CONTRATO -->
         <div v-if="modalLoan.aberto || modalEdicao.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
                 <div class="p-5 border-b border-slate-100 flex justify-between items-center text-white rounded-t-3xl" :class="modalEdicao.aberto ? 'bg-slate-700' : 'bg-rose-600'">
@@ -268,6 +255,7 @@
             </div>
         </div>
 
+        <!-- MODAL AMORTIZAÇÃO -->
         <div v-if="modalAmortizar.aberto" @click.self="modalAmortizar.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100 bg-rose-50">
@@ -311,6 +299,7 @@
             </div>
         </div>
 
+        <!-- MODAL EXTRATO DE DÍVIDA -->
         <div v-if="modalExtrato.aberto" @click.self="fecharModalExtrato" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -387,10 +376,7 @@
     </div>
 
     <script>
-        const { createApp, ref, computed, onMounted, nextTick } = Vue;
-
-        let graficoPizzaObj = null;
-        let graficoLinhaObj = null;
+        const { createApp, ref, computed, onMounted } = Vue;
 
         createApp({
             setup() {
@@ -421,7 +407,6 @@
                     return dividas.value.reduce((acc, curr) => acc + (curr.status !== 'quitted' ? curr.monthly_payment : 0), 0);
                 });
 
-                // CÁLCULO DA TABELA PRICE ATUALIZADO (Agora usa a taxa mensal direto)
                 const priceSugerida = computed(() => {
                     const t = modalAtivo.value;
                     const p = parseFloat(t.total_principal) || 0;
@@ -436,15 +421,10 @@
                     return 0;
                 });
 
+                // CORREÇÃO: Amortização exata pelo valor puro do contrato
                 const valorAmortizacaoEstimada = computed(() => {
-                    const m = formAmortizar.value.monthly_payment;
-                    const p = formAmortizar.value.total_principal;
-                    const n = formAmortizar.value.installments_total;
-                    
-                    if (m > 0) {
-                        const max_parc = Math.floor(p / m);
-                        if (max_parc > 0) return p / max_parc;
-                    }
+                    const p = parseFloat(formAmortizar.value.total_principal) || 0;
+                    const n = parseInt(formAmortizar.value.installments_total) || 0;
                     return n > 0 ? (p / n) : 0;
                 });
 
@@ -482,7 +462,6 @@
                     try { 
                         const res = await fetch('http://localhost:3001/api/dividas'); 
                         dividas.value = await res.json(); 
-                        nextTick(renderGraficos);
                     } catch (e) { console.error(e); } 
                 };
 
@@ -593,95 +572,6 @@
                     } catch(e) { console.error(e); }
                 };
 
-                const renderGraficos = () => {
-                    const ctxPizza = document.getElementById('dividasPieChart');
-                    if (ctxPizza) {
-                        if (graficoPizzaObj) graficoPizzaObj.destroy();
-                        
-                        const dividasAtivas = dividas.value.filter(d => d.status !== 'quitted');
-                        const labelsPizza = dividasAtivas.map(d => d.description);
-                        const dataPizza = dividasAtivas.map(d => calcularSaldoDevedor(d));
-                        const bgColors = ['#f43f5e', '#fb923c', '#fbbf24', '#a3e635', '#2dd4bf', '#818cf8', '#c084fc'];
-
-                        graficoPizzaObj = new Chart(ctxPizza, {
-                            type: 'doughnut',
-                            data: { 
-                                labels: labelsPizza.length ? labelsPizza : ['Nenhuma Dívida'], 
-                                datasets: [{ 
-                                    data: dataPizza.length ? dataPizza : [1], 
-                                    backgroundColor: labelsPizza.length ? bgColors : ['#cbd5e1'], 
-                                    borderWidth: 0, hoverOffset: 4 
-                                }] 
-                            },
-                            options: { 
-                                responsive: true, maintainAspectRatio: false, cutout: '70%', 
-                                plugins: { 
-                                    legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true, font: { size: 11 } } }, 
-                                    tooltip: { callbacks: { label: function(context) { if (!dataPizza.length) return 'R$ 0,00'; return ' ' + formatarMoeda(context.parsed); } } } 
-                                } 
-                            }
-                        });
-                    }
-
-                    const ctxLinha = document.getElementById('linhaTempoChart');
-                    if (ctxLinha) {
-                        if (graficoLinhaObj) graficoLinhaObj.destroy();
-                        
-                        const dividasAtivas = dividas.value.filter(d => d.status !== 'quitted');
-                        
-                        const maxMesesRestantes = Math.max(...dividasAtivas.map(d => d.installments_total - d.installments_paid), 0);
-                        let limit = Math.max(Math.min(maxMesesRestantes, 120), 12); 
-                        
-                        const labelsLinha = [];
-                        const dataLinha = [];
-                        const dataHoje = new Date();
-                        
-                        const passo = limit > 24 ? Math.ceil(limit / 24) : 1; 
-
-                        for (let i = 0; i <= limit; i += passo) {
-                            const d = new Date(dataHoje.getFullYear(), dataHoje.getMonth() + i, 1);
-                            labelsLinha.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
-                            
-                            let somaMesFuturo = 0;
-                            dividasAtivas.forEach(loan => {
-                                const remanescentes = loan.installments_total - loan.installments_paid;
-                                if (remanescentes > i) {
-                                    somaMesFuturo += loan.monthly_payment;
-                                }
-                            });
-                            dataLinha.push(somaMesFuturo);
-                        }
-
-                        graficoLinhaObj = new Chart(ctxLinha, {
-                            type: 'line',
-                            data: {
-                                labels: labelsLinha,
-                                datasets: [{
-                                    label: 'Custo Mensal Estimado',
-                                    data: dataLinha,
-                                    borderColor: '#f43f5e',
-                                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                                    borderWidth: 3,
-                                    fill: true,
-                                    tension: 0.3
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                scales: {
-                                    x: { grid: { display: false } },
-                                    y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + val.toLocaleString('pt-BR') } }
-                                },
-                                plugins: {
-                                    legend: { display: false },
-                                    tooltip: { callbacks: { label: function(context) { return ' ' + formatarMoeda(context.parsed.y); } } }
-                                }
-                            }
-                        });
-                    }
-                };
-
                 // START
                 onMounted(() => { 
                     carregarDividas(); 
@@ -695,7 +585,7 @@
                     modalEdicao, formEdicao, abrirEdicao, salvarEdicao, excluirDivida, excluirDividaDireto, fecharModaisEdicaoECriacao, modalAtivo,
                     modalAmortizar, formAmortizar, abrirAmortizacao, executarAmortizacao, valorAmortizacaoEstimada,
                     getIcon, formatarMoeda, formatarData, calcularSaldoDevedor,
-                    modalExtrato, historicoDivida, resumoExtrato, abrirExtrato, fecharModalExtrato, excluirHistorico, renderGraficos
+                    modalExtrato, historicoDivida, resumoExtrato, abrirExtrato, fecharModalExtrato, excluirHistorico
                 };
             }
         }).mount('#app');
