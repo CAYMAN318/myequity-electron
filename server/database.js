@@ -41,24 +41,32 @@ db.exec(`
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         target_value REAL DEFAULT 0,
-        deadline DATE,
-        status TEXT DEFAULT 'active'
+        icon TEXT DEFAULT 'target',
+        color TEXT DEFAULT '#10b981'
     );
 
     CREATE TABLE IF NOT EXISTS Assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         subcategory_id INTEGER,
-        goal_id INTEGER,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
-        current_balance REAL DEFAULT 0,
-        avg_price REAL DEFAULT 0,
-        total_quantity REAL DEFAULT 0,
-        color TEXT DEFAULT '#3b82f6',
-        is_rebalancing_active INTEGER DEFAULT 1,
+        color TEXT DEFAULT '#cbd5e1',
         status TEXT DEFAULT 'active',
-        FOREIGN KEY (subcategory_id) REFERENCES Subcategories(id),
-        FOREIGN KEY (goal_id) REFERENCES Goals(id)
+        current_balance REAL DEFAULT 0,
+        FOREIGN KEY (subcategory_id) REFERENCES Subcategories(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS EquityHistory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asset_id INTEGER,
+        loan_id INTEGER,
+        type TEXT NOT NULL, 
+        amount REAL NOT NULL,
+        quantity REAL,
+        interest_saved REAL DEFAULT 0,
+        date TEXT NOT NULL,
+        FOREIGN KEY (asset_id) REFERENCES Assets(id) ON DELETE CASCADE,
+        FOREIGN KEY (loan_id) REFERENCES Loans(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS Loans (
@@ -68,37 +76,27 @@ db.exec(`
         interest_rate REAL NOT NULL,
         installments_total INTEGER NOT NULL,
         installments_paid INTEGER DEFAULT 0,
-        monthly_payment REAL DEFAULT 0,
-        start_date DATE,
+        monthly_payment REAL NOT NULL,
+        start_date TEXT NOT NULL,
         is_payroll_deductible INTEGER DEFAULT 0,
         status TEXT DEFAULT 'active'
     );
 
-    CREATE TABLE IF NOT EXISTS EquityHistory (
+    -- ========================================================
+    -- NOVO: Tabela de Fotografia de Valorização (Snapshotting)
+    -- ========================================================
+    CREATE TABLE IF NOT EXISTS AssetSnapshots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        asset_id INTEGER,
-        loan_id INTEGER,
-        type TEXT NOT NULL,
-        amount REAL NOT NULL,
-        quantity REAL DEFAULT 0,
-        interest_saved REAL DEFAULT 0,
-        tax_due REAL DEFAULT 0,
-        date DATE NOT NULL,
-        FOREIGN KEY (asset_id) REFERENCES Assets(id) ON DELETE CASCADE,
-        FOREIGN KEY (loan_id) REFERENCES Loans(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS Settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
+        asset_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        price REAL NOT NULL,
+        total_value REAL NOT NULL,
+        FOREIGN KEY (asset_id) REFERENCES Assets(id) ON DELETE CASCADE
     );
 `);
 
-
-// ============================================================================
-// 2. SISTEMA DE MIGRAÇÃO SEGURA (Atualiza tabelas antigas sem perder dados)
-// ============================================================================
-
+// 2. Módulo de Migração Simples (Adiciona colunas se não existirem)
 // Função auxiliar para verificar se uma coluna existe numa tabela
 function columnExists(tableName, columnName) {
     const tableInfo = db.pragma(`table_info(${tableName})`);
@@ -132,7 +130,5 @@ if (!columnExists('Goals', 'icon')) {
     console.log("Migração: Adicionando coluna 'icon' na tabela Goals...");
     db.exec(`ALTER TABLE Goals ADD COLUMN icon TEXT DEFAULT 'target';`);
 }
-
-// ============================================================================
 
 module.exports = db;

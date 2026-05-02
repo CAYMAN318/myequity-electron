@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyEquity - Dashboard V2 (BI)</title>
+    <title>MyEquity - Dashboard V2 (Executivo)</title>
     <script src="libs/tailwindcss.js"></script>
     <script src="libs/vue.global.js"></script>
     <script src="libs/lucide.js"></script>
@@ -28,10 +28,10 @@
         <div class="flex justify-between items-end mb-8">
             <div>
                 <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Business Intelligence</h1>
-                <p class="text-slate-500 mt-1">Visão global do seu patrimônio, projeções e metas.</p>
+                <p class="text-slate-500 mt-1">Visão global do seu patrimônio atual, alertas e metas.</p>
             </div>
             <div class="text-right">
-                <p class="text-sm font-medium text-slate-500">Patrimônio Líquido (Ativos - Dívidas)</p>
+                <p class="text-sm font-medium text-slate-500">Patrimônio Líquido Real (Ativos - Dívidas)</p>
                 <p class="text-3xl font-black text-blue-600 tracking-tight">{{ formatarMoeda(data.totalAtivos - data.totalDividas) }}</p>
             </div>
         </div>
@@ -98,7 +98,7 @@
                     Nenhuma subcategoria com meta percentual definida.
                 </div>
 
-                <div class="space-y-4">
+                <div class="space-y-4 max-h-72 overflow-y-auto custom-scrollbar pr-2">
                     <div v-for="(cat, idx) in rebalanceCalculado" :key="idx">
                         <div class="flex justify-between text-xs font-bold mb-1">
                             <span class="text-slate-700">{{ cat.category }}</span>
@@ -128,7 +128,7 @@
                     Nenhum ativo alocado em metas específicas.
                 </div>
 
-                <div class="space-y-4">
+                <div class="space-y-4 max-h-72 overflow-y-auto custom-scrollbar pr-2">
                     <div v-for="(goal, idx) in data.goalsModule" :key="idx" v-show="goal.target_amount > 0">
                         <div class="flex justify-between text-xs font-bold mb-1">
                             <span class="text-slate-700">{{ goal.goal }}</span>
@@ -145,73 +145,35 @@
             </div>
         </div>
 
-        <!-- ANDAR 3: DISTRIBUIÇÃO (PIZZAS) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <!-- ANDAR 3: DISTRIBUIÇÃO (PIZZAS MACRO E MICRO) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            
             <div class="card-dash p-6 relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">Concentração de Ativos</h3>
-                <div class="relative h-64 w-full flex justify-center items-center">
-                    <canvas id="ativosPieChart"></canvas>
+                <h3 class="text-sm font-bold text-slate-800 mb-1 text-center">Alocação por Classe</h3>
+                <p class="text-[10px] text-slate-400 text-center mb-4">Ações vs FIIs vs Renda Fixa</p>
+                <div class="relative h-48 w-full flex justify-center items-center">
+                    <canvas id="macroPieChart"></canvas>
                 </div>
             </div>
 
             <div class="card-dash p-6 relative">
-                <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">Concentração de Passivos</h3>
-                <div class="relative h-64 w-full flex justify-center items-center">
+                <h3 class="text-sm font-bold text-slate-800 mb-1 text-center">Concentração por Ativo</h3>
+                <p class="text-[10px] text-slate-400 text-center mb-4">Risco individual em papéis</p>
+                <div class="relative h-48 w-full flex justify-center items-center">
+                    <canvas id="microPieChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card-dash p-6 relative">
+                <h3 class="text-sm font-bold text-slate-800 mb-1 text-center">Composição de Passivos</h3>
+                <p class="text-[10px] text-slate-400 text-center mb-4">Distribuição do saldo devedor</p>
+                <div class="relative h-48 w-full flex justify-center items-center">
                     <canvas id="dividasPieChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- ANDAR 4: MÁQUINA DO TEMPO (NOVO BI) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            
-            <!-- EVOLUÇÃO DE INVESTIMENTOS -->
-            <div class="card-dash p-6 relative">
-                <div class="flex justify-between items-start mb-6">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-800">Evolução de Patrimônio & Receitas</h3>
-                        <p class="text-xs text-slate-500">Histórico no tempo.</p>
-                    </div>
-                    <div class="flex flex-col gap-2 items-end">
-                        <!-- Filtro de Ativo -->
-                        <select v-model="filtroAtivoEvolucao" @change="renderEvolucaoInvestimentos" class="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 max-w-[180px] truncate">
-                            <option value="global">🌍 Visão Global (Todos)</option>
-                            <option v-for="ativo in listaAtivosParaFiltro" :key="ativo.id" :value="ativo.id">
-                                🎯 {{ ativo.name }}
-                            </option>
-                        </select>
-                        
-                        <!-- Toggle Aporte/Receita -->
-                        <div class="flex bg-slate-100 p-1 rounded-lg">
-                            <button @click="tipoVisaoEvolucao = 'aportes'; renderEvolucaoInvestimentos()" class="px-3 py-1 text-xs font-bold rounded-md transition-all" :class="tipoVisaoEvolucao === 'aportes' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'">Aportes</button>
-                            <button @click="tipoVisaoEvolucao = 'receitas'; renderEvolucaoInvestimentos()" class="px-3 py-1 text-xs font-bold rounded-md transition-all" :class="tipoVisaoEvolucao === 'receitas' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'">Receitas</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="relative h-72 w-full">
-                    <canvas id="evolucaoInvestChart"></canvas>
-                </div>
-            </div>
-
-            <!-- PROJEÇÃO DE DÍVIDAS -->
-            <div class="card-dash p-6 relative border-t-4 border-rose-500">
-                <div class="flex justify-between items-start mb-6">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-800">Projeção de Quitação (Passivos)</h3>
-                        <p class="text-xs text-slate-500">Previsão da queda do Custo Mensal no futuro.</p>
-                    </div>
-                    <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm">
-                        <span class="icon-wrapper" v-html="getIcon('calendar', 20)"></span>
-                    </div>
-                </div>
-                <div class="relative h-72 w-full">
-                    <canvas id="evolucaoDividasChart"></canvas>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- MODAL IMPOSTOS (Mantido) -->
+        <!-- MODAL IMPOSTOS (Mantido intacto) -->
         <div v-if="modalImpostos.aberto" @click.self="fecharModalImpostos" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
             <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
                 <div class="p-6 border-b border-amber-100 flex justify-between items-center bg-amber-50">
@@ -256,24 +218,20 @@
     <script>
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
-        let chartAtivosObj = null;
+        // Variaveis globais dos gráficos de pizza
+        let chartMacroObj = null;
+        let chartMicroObj = null;
         let chartDividasObj = null;
-        let chartEvolucaoInvestObj = null;
-        let chartEvolucaoDividasObj = null;
 
         createApp({
             setup() {
                 const data = ref({
                     totalAtivos: 0, totalDividas: 0, totalRendimentos: 0, totalImpostosDevidos: 0,
                     impostosDetalhados: [], rebalanceModule: [], goalsModule: [],
-                    distribuicaoAtivos: [], distribuicaoDividas: { labels: [], valores: [] },
-                    evolutionInvestments: [], activeLoans: []
+                    distribuicaoAtivos: [], distribuicaoDividas: { labels: [], valores: [] }
                 });
 
                 const modalImpostos = ref({ aberto: false });
-                
-                const filtroAtivoEvolucao = ref('global');
-                const tipoVisaoEvolucao = ref('aportes');
 
                 const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
                 const getIcon = (n, s=24) => { try { return lucide.icons[n].toSvg({width:s, height:s}); } catch(e) { return ""; } };
@@ -311,19 +269,8 @@
                     });
                 });
 
-                const listaAtivosParaFiltro = computed(() => {
-                    const map = new Map();
-                    data.value.evolutionInvestments.forEach(item => {
-                        if(item.asset_id && item.asset_name) {
-                            map.set(item.asset_id, item.asset_name);
-                        }
-                    });
-                    return Array.from(map, ([id, name]) => ({id, name})).sort((a,b) => a.name.localeCompare(b.name));
-                });
-
                 const carregarDados = async () => {
                     try {
-                        // AQUI ESTAVA A DIVERGÊNCIA DE ROTAS! AGORA APONTA PARA dashboard-patrimonial
                         const res = await fetch('http://localhost:3001/api/dashboard-patrimonial');
                         const result = await res.json();
                         
@@ -337,35 +284,76 @@
                         data.value.distribuicaoAtivos = result.fundos || [];
                         data.value.distribuicaoDividas = { labels: result.dividasLabels || [], valores: result.dividasValores || [] };
                         
-                        data.value.evolutionInvestments = result.evolutionInvestments || [];
-                        data.value.activeLoans = result.activeLoans || [];
-
                         nextTick(() => {
                             initPizzas();
-                            renderEvolucaoInvestimentos();
-                            renderEvolucaoDividas();
                         });
                     } catch (e) { console.error("Erro ao carregar dashboard:", e); }
                 };
 
                 const initPizzas = () => {
-                    const ctxAtivos = document.getElementById('ativosPieChart');
-                    if (ctxAtivos && data.value.distribuicaoAtivos.length > 0) {
-                        if (chartAtivosObj) chartAtivosObj.destroy();
-                        chartAtivosObj = new Chart(ctxAtivos, {
+                    const optionsComuns = {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(c) { return ` ${formatarMoeda(c.raw)}`; }
+                                }
+                            }
+                        }
+                    };
+
+                    // 1. PIZZA MACRO (Por Classe/Tipo de Ativo)
+                    const ctxMacro = document.getElementById('macroPieChart');
+                    if (ctxMacro && data.value.distribuicaoAtivos.length > 0) {
+                        const macroMap = {};
+                        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f43f5e'];
+                        let colorIdx = 0;
+
+                        data.value.distribuicaoAtivos.forEach(d => {
+                            if (!macroMap[d.tipo]) {
+                                macroMap[d.tipo] = { saldo: 0, cor: defaultColors[colorIdx % defaultColors.length] };
+                                colorIdx++;
+                            }
+                            macroMap[d.tipo].saldo += d.saldo;
+                        });
+
+                        if (chartMacroObj) chartMacroObj.destroy();
+                        chartMacroObj = new Chart(ctxMacro, {
+                            type: 'doughnut',
+                            data: {
+                                labels: Object.keys(macroMap),
+                                datasets: [{
+                                    data: Object.values(macroMap).map(v => v.saldo),
+                                    backgroundColor: Object.values(macroMap).map(v => v.cor),
+                                    borderWidth: 2, hoverOffset: 4
+                                }]
+                            },
+                            options: optionsComuns
+                        });
+                    }
+
+                    // 2. PIZZA MICRO (Concentração por Ativo Individual)
+                    const ctxMicro = document.getElementById('microPieChart');
+                    if (ctxMicro && data.value.distribuicaoAtivos.length > 0) {
+                        if (chartMicroObj) chartMicroObj.destroy();
+                        chartMicroObj = new Chart(ctxMicro, {
                             type: 'doughnut',
                             data: {
                                 labels: data.value.distribuicaoAtivos.map(d => d.nome),
                                 datasets: [{
                                     data: data.value.distribuicaoAtivos.map(d => d.saldo),
                                     backgroundColor: data.value.distribuicaoAtivos.map(d => d.cor),
-                                    borderWidth: 0, hoverOffset: 4
+                                    borderWidth: 2, hoverOffset: 4
                                 }]
                             },
-                            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } }, tooltip: { callbacks: { label: function(c) { return ` ${formatarMoeda(c.raw)}`; } } } } }
+                            options: optionsComuns
                         });
                     }
 
+                    // 3. PIZZA DE PASSIVOS
                     const ctxDividas = document.getElementById('dividasPieChart');
                     if (ctxDividas && data.value.distribuicaoDividas.labels.length > 0) {
                         if (chartDividasObj) chartDividasObj.destroy();
@@ -376,143 +364,12 @@
                                 datasets: [{
                                     data: data.value.distribuicaoDividas.valores,
                                     backgroundColor: ['#f43f5e', '#fb923c', '#f59e0b', '#8b5cf6', '#06b6d4'],
-                                    borderWidth: 0, hoverOffset: 4
+                                    borderWidth: 2, hoverOffset: 4
                                 }]
                             },
-                            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } }, tooltip: { callbacks: { label: function(c) { return ` ${formatarMoeda(c.raw)}`; } } } } }
+                            options: optionsComuns
                         });
                     }
-                };
-
-                const renderEvolucaoInvestimentos = () => {
-                    const ctxEv = document.getElementById('evolucaoInvestChart');
-                    if (!ctxEv) return;
-                    if (chartEvolucaoInvestObj) chartEvolucaoInvestObj.destroy();
-
-                    let rawData = data.value.evolutionInvestments;
-                    if (filtroAtivoEvolucao.value !== 'global') {
-                        rawData = rawData.filter(r => r.asset_id == filtroAtivoEvolucao.value);
-                    }
-
-                    const groupedData = {};
-                    let acumuladoAportes = 0;
-                    let acumuladoReceitas = 0;
-
-                    rawData.forEach(row => {
-                        if (!row.date) return;
-                        const [year, month] = row.date.split('-');
-                        const key = `${month}/${year.slice(-2)}`;
-                        
-                        if (!groupedData[key]) {
-                            groupedData[key] = { label: key, aporteMes: 0, resgateMes: 0, proventoMes: 0, dataSort: new Date(`20${year.slice(-2)}-${month}-01`) };
-                        }
-                        
-                        if (row.type === 'contribution') groupedData[key].aporteMes += row.amount;
-                        if (row.type === 'withdrawal') groupedData[key].resgateMes += row.amount;
-                        if (row.type === 'dividend') groupedData[key].proventoMes += row.amount;
-                    });
-
-                    const timeline = Object.values(groupedData).sort((a, b) => a.dataSort - b.dataSort);
-
-                    timeline.forEach(t => {
-                        acumuladoAportes += (t.aporteMes - t.resgateMes);
-                        acumuladoReceitas += t.proventoMes;
-                        t.aporteAcumulado = Math.max(0, acumuladoAportes);
-                        t.receitaAcumulada = acumuladoReceitas;
-                    });
-
-                    const isAportes = tipoVisaoEvolucao.value === 'aportes';
-                    
-                    chartEvolucaoInvestObj = new Chart(ctxEv, {
-                        type: 'bar',
-                        data: {
-                            labels: timeline.map(t => t.label),
-                            datasets: [
-                                {
-                                    type: 'line',
-                                    label: isAportes ? 'Acumulado Histórico' : 'Proventos Acumulados',
-                                    data: timeline.map(t => isAportes ? t.aporteAcumulado : t.receitaAcumulada),
-                                    borderColor: isAportes ? '#3b82f6' : '#10b981',
-                                    backgroundColor: isAportes ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                                    borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y'
-                                },
-                                {
-                                    type: 'bar',
-                                    label: isAportes ? 'Aporte Físico no Mês' : 'Proventos do Mês',
-                                    data: timeline.map(t => isAportes ? t.aporteMes : t.proventoMes),
-                                    backgroundColor: isAportes ? '#bfdbfe' : '#a7f3d0',
-                                    borderRadius: 4, yAxisID: 'y1'
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true, maintainAspectRatio: false,
-                            interaction: { mode: 'index', intersect: false },
-                            scales: {
-                                x: { grid: { display: false } },
-                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { display: false } },
-                                y1: { type: 'linear', display: false, position: 'right', grid: { display: false } }
-                            },
-                            plugins: {
-                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 10} } },
-                                tooltip: { callbacks: { label: function(c) { return ` ${c.dataset.label}: ${formatarMoeda(c.raw)}`; } } }
-                            }
-                        }
-                    });
-                };
-
-                const renderEvolucaoDividas = () => {
-                    const ctxDiv = document.getElementById('evolucaoDividasChart');
-                    if (!ctxDiv || data.value.activeLoans.length === 0) return;
-                    if (chartEvolucaoDividasObj) chartEvolucaoDividasObj.destroy();
-
-                    const dividasAtivas = data.value.activeLoans;
-                    const maxMesesRestantes = Math.max(...dividasAtivas.map(d => d.installments_total - d.installments_paid), 0);
-                    let limit = Math.max(Math.min(maxMesesRestantes, 120), 12); 
-                    
-                    const labelsLinha = [];
-                    const dataLinha = [];
-                    const dataHoje = new Date();
-                    const passo = limit > 24 ? Math.ceil(limit / 24) : 1; 
-
-                    for (let i = 0; i <= limit; i += passo) {
-                        const d = new Date(dataHoje.getFullYear(), dataHoje.getMonth() + i, 1);
-                        labelsLinha.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`);
-                        
-                        let somaMesFuturo = 0;
-                        dividasAtivas.forEach(loan => {
-                            const remanescentes = loan.installments_total - loan.installments_paid;
-                            if (remanescentes > i) {
-                                somaMesFuturo += loan.monthly_payment;
-                            }
-                        });
-                        dataLinha.push(somaMesFuturo);
-                    }
-
-                    chartEvolucaoDividasObj = new Chart(ctxDiv, {
-                        type: 'line',
-                        data: {
-                            labels: labelsLinha,
-                            datasets: [{
-                                label: 'Custo Mensal Global',
-                                data: dataLinha,
-                                borderColor: '#f43f5e',
-                                backgroundColor: 'rgba(244, 63, 94, 0.1)',
-                                borderWidth: 3, fill: true, tension: 0.3
-                            }]
-                        },
-                        options: {
-                            responsive: true, maintainAspectRatio: false,
-                            scales: {
-                                x: { grid: { display: false } },
-                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + val.toLocaleString('pt-BR') } }
-                            },
-                            plugins: {
-                                legend: { display: false },
-                                tooltip: { callbacks: { label: function(c) { return ' ' + formatarMoeda(c.raw); } } }
-                            }
-                        }
-                    });
                 };
 
                 onMounted(() => {
@@ -524,9 +381,7 @@
                     data, 
                     modalImpostos, abrirModalImpostos, fecharModalImpostos,
                     formatarMoeda, getIcon, carregarDados,
-                    rebalanceCalculado,
-                    filtroAtivoEvolucao, tipoVisaoEvolucao, listaAtivosParaFiltro,
-                    renderEvolucaoInvestimentos
+                    rebalanceCalculado
                 };
             }
         }).mount('#app');

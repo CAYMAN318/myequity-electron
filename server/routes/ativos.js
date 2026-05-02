@@ -299,15 +299,35 @@ router.post('/sync/:id', (req, res) => {
 });
 
 // ============================================================================
-// 8. APLICAR NOVO SALDO (ATUALIZAÇÃO MANUAL OU VIA SYNC)
+// 8. APLICAR NOVO SALDO (ATUALIZAÇÃO MANUAL OU VIA SYNC) + SNAPSHOT
 // ============================================================================
 router.post('/aplicar-sync/:id', (req, res) => {
     const { novo_saldo } = req.body;
+    const asset_id = req.params.id;
+    
     try {
-        const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(req.params.id);
+        const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
         if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
 
-        db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, req.params.id);
+        db.transaction(() => {
+            // 1. Atualiza o Saldo Atual na carteira (Lógica original)
+            db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, asset_id);
+
+            // 2. Tira a "Fotografia" (Snapshot) para o Gráfico de Relatórios (NOVO)
+            const qtdExata = calcularEstadoMatematico(asset_id, db).quantidade;
+            const precoMercado = qtdExata > 0 ? (novo_saldo / qtdExata) : 0;
+            const hoje = new Date().toISOString().split('T')[0];
+
+            // Remove a fotografia anterior de hoje (se existir) para não duplicar dados se você sincronizar 2x no mesmo dia
+            db.prepare("DELETE FROM AssetSnapshots WHERE asset_id = ? AND date = ?").run(asset_id, hoje);
+
+            // Salva a nova fotografia na linha do tempo
+            db.prepare(`
+                INSERT INTO AssetSnapshots (asset_id, date, quantity, price, total_value)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(asset_id, hoje, qtdExata, precoMercado, novo_saldo);
+        })();
+
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });

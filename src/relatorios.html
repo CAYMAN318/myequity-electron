@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEquity - Relatórios e Análise</title>
+    
+    <script src="libs/tailwindcss.js"></script>
+    <script src="libs/vue.global.js"></script>
+    <script src="libs/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+        .card-analitico { background: white; border-radius: 24px; border: 1px solid #e2e8f0; transition: all 0.3s ease; }
+        .card-analitico:hover { border-color: #cbd5e1; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
+    </style>
+</head>
+<body class="p-8 text-left">
+
+    <div id="app" class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- CABEÇALHO -->
+        <div class="flex justify-between items-end mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Análise de Portfólio</h1>
+                <p class="text-slate-500 mt-1">Evolução de patrimônio, rentabilidade e amortizações.</p>
+            </div>
+            <div class="text-right">
+                <div class="flex items-center gap-2 mt-1 justify-end">
+                    <span v-if="loading" class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+                    <span v-else class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <p class="text-sm font-bold" :class="loading ? 'text-blue-600' : 'text-emerald-600'">
+                        {{ loading ? 'Sincronizando dados...' : 'Dados Sincronizados' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ANDAR SUPERIOR: GRÁFICO DE ATIVOS -->
+        <div class="card-analitico p-6 border-t-4 border-blue-500 relative flex flex-col">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800">Evolução de Ativos e Receitas</h3>
+                    <p class="text-sm text-slate-500">Aportes e Volatilidade no tempo.</p>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Filtro de Tempo -->
+                    <div class="flex bg-slate-100 p-1 rounded-lg">
+                        <button @click="filtroTempo = '6m'; renderEvolucaoInvestimentos()" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all" :class="filtroTempo === '6m' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'">6M</button>
+                        <button @click="filtroTempo = '1a'; renderEvolucaoInvestimentos()" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all" :class="filtroTempo === '1a' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'">1A</button>
+                        <button @click="filtroTempo = '5a'; renderEvolucaoInvestimentos()" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all" :class="filtroTempo === '5a' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'">5A</button>
+                        <button @click="filtroTempo = 'max'; renderEvolucaoInvestimentos()" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all" :class="filtroTempo === 'max' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'">MÁX</button>
+                    </div>
+
+                    <!-- Toggle Aporte/Receita -->
+                    <div class="flex bg-slate-100 p-1 rounded-lg">
+                        <button @click="tipoVisaoEvolucao = 'aportes'; renderEvolucaoInvestimentos()" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all" :class="tipoVisaoEvolucao === 'aportes' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'">Aportes</button>
+                        <button @click="tipoVisaoEvolucao = 'receitas'; renderEvolucaoInvestimentos()" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all" :class="tipoVisaoEvolucao === 'receitas' ? 'bg-emerald-100 text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'">Proventos</button>
+                    </div>
+
+                    <!-- Filtro de Ativo -->
+                    <select v-model="filtroAtivoEvolucao" @change="renderEvolucaoInvestimentos" class="text-xs font-bold border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 max-w-[180px] truncate">
+                        <option value="global">🌍 Global</option>
+                        <option v-for="ativo in listaAtivosParaFiltro" :key="ativo.id" :value="ativo.id">
+                            {{ ativo.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="relative w-full flex-grow flex justify-center items-center h-80">
+                <div v-if="loading" class="absolute text-slate-400 flex flex-col items-center gap-2">
+                    <span class="icon-wrapper animate-spin" v-html="getIcon('loader-2', 32)"></span>
+                </div>
+                <canvas id="evolucaoInvestChart" :class="loading ? 'opacity-0' : 'opacity-100 transition-opacity duration-500'"></canvas>
+            </div>
+        </div>
+
+        <!-- ANDAR INFERIOR: GRÁFICO DE DÍVIDAS -->
+        <div class="card-analitico p-6 border-t-4 border-rose-500 relative flex flex-col mt-6">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800">Custo Mensal de Passivos</h3>
+                    <p class="text-sm text-slate-500">Histórico de encargos passados e projeção do alívio futuro.</p>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <!-- Filtro de Dívida Individual (NOVO) -->
+                    <select v-model="filtroDivida" @change="renderEvolucaoDividas" class="text-xs font-bold border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:border-rose-500 max-w-[200px] truncate">
+                        <option value="global">🌍 Visão Global (Todas)</option>
+                        <option v-for="loan in data.activeLoans" :key="loan.id" :value="loan.id">
+                            {{ loan.description }}
+                        </option>
+                    </select>
+                    
+                    <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm">
+                        <span class="icon-wrapper" v-html="getIcon('trending-down', 20)"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="relative w-full flex-grow flex justify-center items-center h-72">
+                <div v-if="data.activeLoans.length === 0 && !loading" class="absolute text-slate-400 flex flex-col items-center gap-2 text-center">
+                    <span class="icon-wrapper opacity-50" v-html="getIcon('award', 48)"></span>
+                    <span class="text-sm font-bold text-slate-500">Nenhum passivo ativo.</span>
+                </div>
+                <canvas id="evolucaoDividasChart" :class="loading || data.activeLoans.length === 0 ? 'opacity-0' : 'opacity-100 transition-opacity duration-500'"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+        let chartEvolucaoInvestObj = null;
+        let chartEvolucaoDividasObj = null;
+
+        createApp({
+            setup() {
+                const loading = ref(true);
+                const data = ref({
+                    evolutionInvestments: [],
+                    snapshots: [],
+                    activeLoans: []
+                });
+
+                const filtroAtivoEvolucao = ref('global');
+                const tipoVisaoEvolucao = ref('aportes');
+                const filtroTempo = ref('max'); // 6m, 1a, 5a, max
+                
+                // NOVO: Controle do filtro de dívidas
+                const filtroDivida = ref('global');
+
+                const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+                const getIcon = (n, s=24) => { try { return lucide.icons[n].toSvg({width:s, height:s}); } catch(e) { return ""; } };
+
+                const listaAtivosParaFiltro = computed(() => {
+                    const map = new Map();
+                    data.value.evolutionInvestments.forEach(item => {
+                        if(item.asset_id && item.asset_name) map.set(item.asset_id, item.asset_name);
+                    });
+                    return Array.from(map, ([id, name]) => ({id, name})).sort((a,b) => a.name.localeCompare(b.name));
+                });
+
+                const carregarDados = async () => {
+                    loading.value = true;
+                    try {
+                        const res = await fetch('http://localhost:3001/api/relatorios');
+                        const result = await res.json();
+                        
+                        data.value.evolutionInvestments = result.evolutionInvestments || [];
+                        data.value.snapshots = result.snapshots || [];
+                        data.value.activeLoans = result.activeLoans || [];
+
+                        nextTick(() => {
+                            renderEvolucaoInvestimentos();
+                            renderEvolucaoDividas();
+                            loading.value = false;
+                        });
+                    } catch (e) { 
+                        console.error("Erro ao carregar relatórios:", e); 
+                        loading.value = false;
+                    }
+                };
+
+                const renderEvolucaoInvestimentos = () => {
+                    const ctxEv = document.getElementById('evolucaoInvestChart');
+                    if (!ctxEv) return;
+                    if (chartEvolucaoInvestObj) chartEvolucaoInvestObj.destroy();
+
+                    let rawData = data.value.evolutionInvestments;
+                    if (filtroAtivoEvolucao.value !== 'global') {
+                        rawData = rawData.filter(r => r.asset_id == filtroAtivoEvolucao.value);
+                    }
+
+                    const groupedData = {};
+                    let acumuladoAportes = 0;
+                    let acumuladoReceitas = 0;
+
+                    // Agrupa aportes/rendimentos por mês
+                    rawData.forEach(row => {
+                        if (!row.date) return;
+                        const [year, month] = row.date.split('-');
+                        const key = `${year}-${month}`;
+                        
+                        if (!groupedData[key]) {
+                            groupedData[key] = { label: `${month}/${year.slice(-2)}`, aporteMes: 0, resgateMes: 0, proventoMes: 0, dataSort: new Date(`${year}-${month}-02`), patrimonioSnapshot: null };
+                        }
+                        
+                        if (row.type === 'contribution') groupedData[key].aporteMes += row.amount;
+                        if (row.type === 'withdrawal') groupedData[key].resgateMes += row.amount;
+                        if (row.type === 'dividend') groupedData[key].proventoMes += row.amount;
+                    });
+
+                    // Agrupa Snapshots (Marcação a Mercado) na mesma timeline
+                    if (filtroAtivoEvolucao.value === 'global') {
+                        data.value.snapshots.forEach(snap => {
+                            if (!snap.date) return;
+                            const [year, month] = snap.date.split('-');
+                            const key = `${year}-${month}`;
+                            if (!groupedData[key]) {
+                                groupedData[key] = { label: `${month}/${year.slice(-2)}`, aporteMes: 0, resgateMes: 0, proventoMes: 0, dataSort: new Date(`${year}-${month}-02`), patrimonioSnapshot: null };
+                            }
+                            // O último snapshot do mês prevalece
+                            groupedData[key].patrimonioSnapshot = snap.patrimonio_total; 
+                        });
+                    }
+
+                    let timeline = Object.values(groupedData).sort((a, b) => a.dataSort - b.dataSort);
+
+                    // Acumula os valores na linha do tempo
+                    timeline.forEach(t => {
+                        acumuladoAportes += (t.aporteMes - t.resgateMes);
+                        acumuladoReceitas += t.proventoMes;
+                        t.aporteAcumulado = Math.max(0, acumuladoAportes);
+                        t.receitaAcumulada = acumuladoReceitas;
+                    });
+
+                    // APLICAÇÃO DO FILTRO DE TEMPO
+                    if (filtroTempo.value !== 'max') {
+                        const hoje = new Date();
+                        let mesesSubtrair = 6;
+                        if (filtroTempo.value === '1a') mesesSubtrair = 12;
+                        if (filtroTempo.value === '5a') mesesSubtrair = 60;
+                        
+                        const dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - mesesSubtrair, 1);
+                        timeline = timeline.filter(t => t.dataSort >= dataLimite);
+                    }
+
+                    const isAportes = tipoVisaoEvolucao.value === 'aportes';
+                    
+                    const datasets = [
+                        {
+                            type: 'line',
+                            label: isAportes ? 'Custo de Aquisição (Aportes)' : 'Proventos Acumulados',
+                            data: timeline.map(t => isAportes ? t.aporteAcumulado : t.receitaAcumulada),
+                            borderColor: isAportes ? '#3b82f6' : '#10b981',
+                            backgroundColor: isAportes ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2, borderDash: [5, 5], fill: true, tension: 0.3, yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: isAportes ? 'Fluxo no Mês (Aporte)' : 'Recebimento no Mês',
+                            data: timeline.map(t => isAportes ? t.aporteMes : t.proventoMes),
+                            backgroundColor: isAportes ? '#bfdbfe' : '#a7f3d0',
+                            borderRadius: 4, yAxisID: 'y1'
+                        }
+                    ];
+
+                    // Se for visão global de aportes, adiciona a linha verde de patrimônio real
+                    if (isAportes && filtroAtivoEvolucao.value === 'global') {
+                        datasets.unshift({
+                            type: 'line',
+                            label: 'Patrimônio Total (Marcação)',
+                            data: timeline.map(t => t.patrimonioSnapshot),
+                            borderColor: '#0f766e', // Teal escuro
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.3,
+                            spanGaps: true, // Importante: Liga os pontos mesmo se um mês não tiver foto
+                            yAxisID: 'y'
+                        });
+                    }
+
+                    chartEvolucaoInvestObj = new Chart(ctxEv, {
+                        type: 'bar',
+                        data: {
+                            labels: timeline.map(t => t.label),
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
+                            scales: {
+                                x: { grid: { display: false } },
+                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + (val/1000) + 'k' } },
+                                y1: { type: 'linear', display: false, position: 'right', grid: { display: false } }
+                            },
+                            plugins: {
+                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 11} } },
+                                tooltip: { callbacks: { label: function(c) { return ` ${c.dataset.label}: ${formatarMoeda(c.raw)}`; } } }
+                            }
+                        }
+                    });
+                };
+
+                const renderEvolucaoDividas = () => {
+                    const ctxDiv = document.getElementById('evolucaoDividasChart');
+                    if (!ctxDiv || data.value.activeLoans.length === 0) return;
+                    if (chartEvolucaoDividasObj) chartEvolucaoDividasObj.destroy();
+
+                    // LÓGICA DE FILTRAGEM INDIVIDUAL
+                    let dividasAtivas = data.value.activeLoans;
+                    if (filtroDivida.value !== 'global') {
+                        dividasAtivas = dividasAtivas.filter(d => d.id === filtroDivida.value);
+                    }
+
+                    if (dividasAtivas.length === 0) return;
+                    
+                    // LÓGICA DO PASSADO VS FUTURO (Apenas das dívidas filtradas)
+                    let minDate = new Date();
+                    dividasAtivas.forEach(loan => {
+                        if (loan.start_date) {
+                            const ld = new Date(loan.start_date);
+                            if (ld < minDate) minDate = ld;
+                        }
+                    });
+
+                    // Calcula o mês limite no futuro
+                    const maxMesesRestantes = Math.max(...dividasAtivas.map(d => d.installments_total - d.installments_paid), 0);
+                    let limitMesesFuturo = Math.max(Math.min(maxMesesRestantes, 120), 12); 
+                    
+                    const labelsLinha = [];
+                    const dataPassado = [];
+                    const dataFuturo = [];
+                    
+                    const dataHoje = new Date();
+                    const hojeRef = dataHoje.getFullYear() * 12 + dataHoje.getMonth();
+                    
+                    // Começa a plotar do início da dívida mais velha até o fim
+                    let iterDate = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                    const endDate = new Date(dataHoje.getFullYear(), dataHoje.getMonth() + limitMesesFuturo, 1);
+
+                    while (iterDate <= endDate) {
+                        labelsLinha.push(`${String(iterDate.getMonth()+1).padStart(2,'0')}/${String(iterDate.getFullYear()).slice(-2)}`);
+                        
+                        const iterRef = iterDate.getFullYear() * 12 + iterDate.getMonth();
+                        let custoMes = 0;
+
+                        dividasAtivas.forEach(loan => {
+                            if (!loan.start_date) return;
+                            const loanStart = new Date(loan.start_date);
+                            const startRef = loanStart.getFullYear() * 12 + loanStart.getMonth();
+                            const endRef = startRef + loan.installments_total;
+
+                            if (iterRef >= startRef && iterRef <= endRef) {
+                                custoMes += loan.monthly_payment;
+                            }
+                        });
+
+                        // Divide os dados entre passado e futuro
+                        if (iterRef <= hojeRef) {
+                            dataPassado.push(custoMes);
+                            dataFuturo.push(iterRef === hojeRef ? custoMes : null); 
+                        } else {
+                            dataPassado.push(null);
+                            dataFuturo.push(custoMes);
+                        }
+
+                        iterDate.setMonth(iterDate.getMonth() + 1);
+                    }
+
+                    chartEvolucaoDividasObj = new Chart(ctxDiv, {
+                        type: 'line',
+                        data: {
+                            labels: labelsLinha,
+                            datasets: [
+                                {
+                                    label: filtroDivida.value === 'global' ? 'Histórico Passado (Global)' : 'Histórico (Contrato)',
+                                    data: dataPassado,
+                                    borderColor: 'rgba(244, 63, 94, 0.4)',
+                                    borderWidth: 2, 
+                                    borderDash: [5, 5], 
+                                    fill: false, 
+                                    tension: 0.1
+                                },
+                                {
+                                    label: filtroDivida.value === 'global' ? 'Projeção Futura (Global)' : 'Projeção (Contrato)',
+                                    data: dataFuturo,
+                                    borderColor: '#e11d48',
+                                    backgroundColor: 'rgba(225, 29, 72, 0.1)',
+                                    borderWidth: 3, 
+                                    fill: true, 
+                                    tension: 0.1
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            scales: {
+                                x: { grid: { display: false }, ticks: { maxTicksLimit: 24 } },
+                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + val.toLocaleString('pt-BR') } }
+                            },
+                            plugins: {
+                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 11} } },
+                                tooltip: { callbacks: { label: function(c) { return ' ' + formatarMoeda(c.raw); } } }
+                            }
+                        }
+                    });
+                };
+
+                onMounted(() => {
+                    setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150);
+                    carregarDados();
+                });
+
+                return { 
+                    loading,
+                    data, 
+                    formatarMoeda, 
+                    getIcon, 
+                    filtroAtivoEvolucao, 
+                    tipoVisaoEvolucao,
+                    filtroTempo,
+                    filtroDivida,
+                    listaAtivosParaFiltro,
+                    renderEvolucaoInvestimentos,
+                    renderEvolucaoDividas
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
