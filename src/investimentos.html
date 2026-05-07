@@ -10,42 +10,13 @@
     <script src="libs/lucide.js"></script>
 
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #f8fafc; 
-        }
-        span.icon-wrapper { 
-            display: inline-flex; 
-            align-items: center; 
-            justify-content: center; 
-            line-height: 0; 
-        }
-        .asset-card { 
-            transition: all 0.3s ease; 
-            border: 1px solid #e2e8f0; 
-            min-height: 480px; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: space-between; 
-            background: white; 
-            border-radius: 24px;
-        }
-        .asset-card:hover { 
-            border-color: #3b82f6; 
-            transform: translateY(-4px); 
-            box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.1); 
-        }
-        .modal-blur { 
-            backdrop-filter: blur(8px); 
-            background-color: rgba(15, 23, 42, 0.6); 
-        }
-        .custom-scrollbar::-webkit-scrollbar { 
-            width: 6px; 
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb { 
-            background: #cbd5e1; 
-            border-radius: 10px; 
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+        .asset-card { transition: all 0.3s ease; border: 1px solid #e2e8f0; min-height: 480px; display: flex; flex-direction: column; justify-content: space-between; background: white; border-radius: 24px;}
+        .asset-card:hover { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.1); }
+        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.6); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
 </head>
 <body class="p-8 text-left">
@@ -104,6 +75,10 @@
                             {{ ativo.name.substring(0, 2).toUpperCase() }}
                         </div>
                         <div class="flex gap-2">
+                            <!-- NOVO BOTÃO: EDIÇÃO DE METADADOS IRPF -->
+                            <button @click="abrirModalEdicao(ativo)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all" title="Editar Metadados (IRPF)">
+                                <span class="icon-wrapper" v-html="getIcon('settings', 18)"></span>
+                            </button>
                             <button @click="prepararAtualizacaoManual(ativo)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-emerald-300 hover:text-emerald-600 shadow-sm transition-all" title="Atualizar Preço Manualmente">
                                 <span class="icon-wrapper" v-html="getIcon('edit-2', 18)"></span>
                             </button>
@@ -117,23 +92,20 @@
                     </div>
 
                     <h2 class="text-xl font-bold text-slate-800 tracking-tight">{{ ativo.name }}</h2>
+                    <p class="text-[10px] font-bold text-slate-400 mt-1 truncate" :title="ativo.razao_social || 'Empresa/Fundo'">{{ ativo.razao_social || 'Metadados não preenchidos' }}</p>
                     
-                    <!-- SISTEMA DE TAGS RESTAURADO E MELHORADO -->
                     <div class="flex flex-wrap gap-1.5 mt-2 mb-4">
-                        <!-- Tag de Tipo -->
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200" title="Tipo do Ativo">
                             <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: ativo.color }"></span>
                             {{ ativo.type }}
                         </span>
                         
-                        <!-- Tag de Classe e Subcategoria -->
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200" title="Classe e Categoria">
                             <span class="icon-wrapper text-slate-400" v-html="getIcon('layers', 10)"></span>
                             <template v-if="ativo.class_name">{{ ativo.class_name }} <span class="text-slate-300 font-normal mx-0.5">/</span></template> 
                             {{ ativo.subcategory_name || 'Sem Categoria' }}
                         </span>
 
-                        <!-- Tag de Meta (Bucketing) -->
                         <span v-if="ativo.goal_name" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Objetivo Financeiro (Bucketing)">
                             <span class="icon-wrapper text-indigo-400" v-html="getIcon('target', 10)"></span>
                             {{ ativo.goal_name }}
@@ -154,7 +126,6 @@
                             <span class="text-xs font-bold text-blue-600">{{ formatarMoeda(ativo.avg_price) }}</span>
                         </div>
                         
-                        <!-- LINHA: PROVENTOS ACUMULADOS NO CARD -->
                         <div class="flex justify-between pt-2 mt-1 border-t border-slate-200 border-dashed">
                             <span class="text-xs font-medium text-slate-500">Proventos Acumulados</span>
                             <span class="text-xs font-bold text-emerald-600">{{ formatarMoeda(ativo.proventos_acumulados) }}</span>
@@ -186,14 +157,15 @@
             </div>
         </div>
 
-        <!-- MODAL NOVO ATIVO -->
-        <div v-if="modalNovoAtivo" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+        <!-- MODAL FORMULÁRIO DE ATIVO (Criação e Edição - Com Campos IRPF) -->
+        <div v-if="modalFormAtivo.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
-                <div class="p-5 border-b border-slate-100 bg-blue-600 flex justify-between items-center text-white rounded-t-3xl">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center text-white rounded-t-3xl" :class="modalFormAtivo.modoEdicao ? 'bg-indigo-600' : 'bg-blue-600'">
                     <h2 class="text-lg font-bold flex items-center gap-2">
-                        <span class="icon-wrapper" v-html="getIcon('plus-circle')"></span>Novo Ativo
+                        <span class="icon-wrapper" v-html="getIcon(modalFormAtivo.modoEdicao ? 'settings' : 'plus-circle')"></span>
+                        {{ modalFormAtivo.modoEdicao ? 'Editar Metadados' : 'Novo Ativo' }}
                     </h2>
-                    <button @click="fecharModalNovoAtivo" class="text-white/70 hover:text-white transition-colors">
+                    <button @click="fecharModalFormAtivo" class="text-white/70 hover:text-white transition-colors">
                         <span class="icon-wrapper" v-html="getIcon('x')"></span>
                     </button>
                 </div>
@@ -201,9 +173,9 @@
                     
                     <div class="relative">
                         <label class="block text-xs font-bold text-slate-700 mb-1">Nome/Ticker do Ativo</label>
-                        <input v-model="formNovoAtivo.name" @input="buscarSugestoes" @focus="buscarSugestoes" @blur="fecharSugestoesComAtraso" type="text" placeholder="Ex: ITUB3, MXRF11, Tesouro Selic..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase">
+                        <input v-model="formAtivo.name" @input="buscarSugestoes" @focus="buscarSugestoes" @blur="fecharSugestoesComAtraso" type="text" placeholder="Ex: ITUB3, MXRF11, Tesouro Selic..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase">
                         
-                        <div v-if="sugestoes.length > 0" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        <div v-if="sugestoes.length > 0 && !modalFormAtivo.modoEdicao" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                             <div v-for="s in sugestoes" :key="s.ticker" @click="selecionarTicker(s)" class="px-4 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0">
                                 <div>
                                     <span class="font-bold text-slate-800 block">{{ s.ticker }}</span>
@@ -214,10 +186,27 @@
                         </div>
                     </div>
 
+                    <!-- Novos Campos de Metadados IRPF -->
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dados para IRPF (Opcional)</p>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">CNPJ do Ativo</label>
+                            <input v-model="formAtivo.cnpj" type="text" placeholder="00.000.000/0000-00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">Razão Social</label>
+                            <input v-model="formAtivo.razao_social" type="text" placeholder="Ex: Itaú Unibanco S.A." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 mb-1">Corretora / Custódia</label>
+                            <input v-model="formAtivo.corretora" type="text" placeholder="Ex: NuInvest, BTG..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 bg-white focus:outline-none">
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1">Tipo de Classe</label>
-                            <select v-model="formNovoAtivo.type" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                            <select v-model="formAtivo.type" :disabled="modalFormAtivo.modoEdicao" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" :class="modalFormAtivo.modoEdicao ? 'bg-slate-100 cursor-not-allowed opacity-70' : 'bg-white'">
                                 <option value="Ações">Ações</option>
                                 <option value="FIIs">FIIs (Fundos Imob.)</option>
                                 <option value="Fiagro">Fiagro</option>
@@ -233,13 +222,13 @@
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1">Cor do Card</label>
-                            <input v-model="formNovoAtivo.color" type="color" class="w-full h-[46px] rounded-xl cursor-pointer border border-slate-300 p-1 bg-white">
+                            <input v-model="formAtivo.color" type="color" class="w-full h-[46px] rounded-xl cursor-pointer border border-slate-300 p-1 bg-white">
                         </div>
                     </div>
 
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">Subcategoria da Carteira</label>
-                        <select v-model="formNovoAtivo.subcategory_id" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                        <select v-model="formAtivo.subcategory_id" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
                             <option value="">Sem Categoria Associada</option>
                             <option v-for="sub in subcategories" :key="sub.id" :value="sub.id">{{ sub.name }}</option>
                         </select>
@@ -248,23 +237,25 @@
 
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">Objetivo Financeiro</label>
-                        <select v-model="formNovoAtivo.goal_id" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                        <select v-model="formAtivo.goal_id" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
                             <option value="">Carteira Geral Livre</option>
                             <option v-for="goal in goals" :key="goal.id" :value="goal.id">{{ goal.name }}</option>
                         </select>
                     </div>
 
-                    <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 cursor-pointer" @click="formNovoAtivo.is_rebalancing_active = !formNovoAtivo.is_rebalancing_active">
-                        <div class="w-5 h-5 rounded border flex items-center justify-center transition-colors" :class="formNovoAtivo.is_rebalancing_active ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'">
-                            <span v-if="formNovoAtivo.is_rebalancing_active" class="icon-wrapper text-white" v-html="getIcon('check', 14)"></span>
+                    <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 cursor-pointer" @click="formAtivo.is_rebalancing_active = !formAtivo.is_rebalancing_active">
+                        <div class="w-5 h-5 rounded border flex items-center justify-center transition-colors" :class="formAtivo.is_rebalancing_active ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'">
+                            <span v-if="formAtivo.is_rebalancing_active" class="icon-wrapper text-white" v-html="getIcon('check', 14)"></span>
                         </div>
                         <label class="text-sm text-slate-700 font-medium cursor-pointer select-none">Incluir este ativo no Motor de Rebalanceamento Automático</label>
                     </div>
 
                 </div>
                 <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end gap-2">
-                    <button @click="fecharModalNovoAtivo" class="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
-                    <button @click="salvarNovoAtivo" class="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-colors">Salvar Ativo</button>
+                    <button @click="fecharModalFormAtivo" class="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <button @click="salvarAtivo" class="px-6 py-2 text-sm font-bold text-white rounded-xl shadow-md transition-colors" :class="modalFormAtivo.modoEdicao ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'">
+                        {{ modalFormAtivo.modoEdicao ? 'Guardar Edição' : 'Salvar Ativo' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -537,8 +528,9 @@
                 const goals = ref([]);
                 const totalAplicado = ref(0);
 
-                const modalNovoAtivo = ref(false);
-                const formNovoAtivo = ref({ name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true });
+                // Variáveis do Modal Híbrido (Criar/Editar)
+                const modalFormAtivo = ref({ aberto: false, modoEdicao: false });
+                const formAtivo = ref({ id: null, name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true, cnpj: '', razao_social: '', corretora: '' });
                 const sugestoes = ref([]);
                 let blurTimeout = null;
 
@@ -579,7 +571,6 @@
                         subcategories.value = await resSub.json();
                         goals.value = await resGoals.json();
 
-                        // O Frontend puxa o histórico de cada ativo para preencher os Proventos no Card sem depender de rotas complexas
                         const historicosPromises = ativosData.map(a => 
                             fetch(`http://localhost:3001/api/ativos/history/${a.id}`).then(res => res.json().then(hist => ({ id: a.id, hist })))
                         );
@@ -619,15 +610,29 @@
                     return { proventos, lucroRealizado, capitalInvestido };
                 });
 
+                // LÓGICA DO MODAL HÍBRIDO (CRIAR E EDITAR)
                 const abrirModalNovoAtivo = () => { 
-                    formNovoAtivo.value = { name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true };
-                    modalNovoAtivo.value = true; 
+                    formAtivo.value = { id: null, name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true, cnpj: '', razao_social: '', corretora: '' };
+                    modalFormAtivo.value = { aberto: true, modoEdicao: false }; 
                     sugestoes.value = [];
                 };
-                const fecharModalNovoAtivo = () => { modalNovoAtivo.value = false; };
+
+                const abrirModalEdicao = (ativo) => {
+                    formAtivo.value = { 
+                        id: ativo.id, name: ativo.name, type: ativo.type, color: ativo.color, 
+                        subcategory_id: ativo.subcategory_id || '', goal_id: ativo.goal_id || '', 
+                        is_rebalancing_active: ativo.is_rebalancing_active === 1,
+                        cnpj: ativo.cnpj || '', razao_social: ativo.razao_social || '', corretora: ativo.corretora || ''
+                    };
+                    modalFormAtivo.value = { aberto: true, modoEdicao: true }; 
+                    sugestoes.value = [];
+                };
+
+                const fecharModalFormAtivo = () => { modalFormAtivo.value.aberto = false; };
 
                 const buscarSugestoes = () => {
-                    const q = formNovoAtivo.value.name.toUpperCase();
+                    if (modalFormAtivo.value.modoEdicao) return; // Não sugere durante a edição
+                    const q = formAtivo.value.name.toUpperCase();
                     if(q.length < 1) { sugestoes.value = []; return; }
                     
                     sugestoes.value = tickersDB.filter(t => t.ticker.includes(q) || t.nome.toUpperCase().includes(q)).slice(0, 5);
@@ -643,10 +648,10 @@
                 
                 const selecionarTicker = (s) => {
                     clearTimeout(blurTimeout);
-                    formNovoAtivo.value.name = s.ticker;
+                    formAtivo.value.name = s.ticker;
                     
                     const mapTipos = { 'FII/ETF': 'FIIs', 'Ações': 'Ações', 'BDR': 'BDRs' };
-                    if(mapTipos[s.tipo]) formNovoAtivo.value.type = mapTipos[s.tipo];
+                    if(mapTipos[s.tipo]) formAtivo.value.type = mapTipos[s.tipo];
                     
                     sugestoes.value = [];
                 };
@@ -656,11 +661,14 @@
                     return cores[tipo] || 'bg-slate-100 text-slate-700';
                 };
 
-                const salvarNovoAtivo = async () => {
-                    if (!formNovoAtivo.value.name) return alert('O Ticker/Nome é obrigatório.');
+                const salvarAtivo = async () => {
+                    if (!formAtivo.value.name) return alert('O Ticker/Nome é obrigatório.');
                     try {
-                        await fetch('http://localhost:3001/api/ativos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formNovoAtivo.value) });
-                        fecharModalNovoAtivo();
+                        const url = modalFormAtivo.value.modoEdicao ? `http://localhost:3001/api/ativos/${formAtivo.value.id}` : 'http://localhost:3001/api/ativos';
+                        const method = modalFormAtivo.value.modoEdicao ? 'PUT' : 'POST';
+
+                        await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formAtivo.value) });
+                        fecharModalFormAtivo();
                         carregarDadosEGraficos();
                     } catch (e) { console.error(e); }
                 };
@@ -851,9 +859,8 @@
                 });
 
                 return { 
-                    mostrarEncerrados, 
-                    ativos, totalAplicado, subcategories, goals,
-                    modalNovoAtivo, formNovoAtivo, abrirModalNovoAtivo, fecharModalNovoAtivo, salvarNovoAtivo,
+                    mostrarEncerrados, ativos, totalAplicado, subcategories, goals,
+                    modalFormAtivo, formAtivo, abrirModalNovoAtivo, abrirModalEdicao, fecharModalFormAtivo, salvarAtivo,
                     sugestoes, buscarSugestoes, fecharSugestoesComAtraso, selecionarTicker, getTypeColor,
                     modalOp, modalSync, modalExtrato, modalRendimento, modalAtualizacaoManual, formOp, formRendimento, formAtualizacao,
                     formatarMoeda, formatarData, getIcon, carregarDadosEGraficos, excluirAtivo, fecharModalExtrato,

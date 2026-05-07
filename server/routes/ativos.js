@@ -4,7 +4,7 @@ const db = require('../database');
 const https = require('https');
 
 // ============================================================================
-// FUNÇÃO CENTRAL DE INTEGRIDADE MATEMÁTICA (NOVO)
+// FUNÇÃO CENTRAL DE INTEGRIDADE MATEMÁTICA
 // Resolve problemas de precisão de decimais (Cripto/Fundos) e dessincronização de cache.
 // ============================================================================
 function calcularEstadoMatematico(asset_id, dbInstance) {
@@ -50,7 +50,6 @@ router.get('/', (req, res) => {
         `).all();
         
         const enriched = assets.map(asset => {
-            // Usa o novo motor central para enviar dados sempre corretos para a tela
             const estadoReal = calcularEstadoMatematico(asset.id, db);
             asset.avg_price = estadoReal.precoMedio;
             asset.total_quantity = estadoReal.quantidade;
@@ -62,16 +61,40 @@ router.get('/', (req, res) => {
 });
 
 // ============================================================================
-// 2. CRIAR NOVO ATIVO
+// 2. CRIAR NOVO ATIVO (Atualizado com IRPF)
 // ============================================================================
 router.post('/', (req, res) => {
-    const { name, type, color, subcategory_id, goal_id, is_rebalancing_active } = req.body;
+    const { name, type, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora } = req.body;
     try {
         db.prepare(`
-            INSERT INTO Assets (name, type, color, subcategory_id, goal_id, is_rebalancing_active) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        `).run(name, type, color || '#3b82f6', subcategory_id || null, goal_id || null, is_rebalancing_active ? 1 : 0);
+            INSERT INTO Assets (name, type, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            name, type, color || '#3b82f6', subcategory_id || null, goal_id || null, 
+            is_rebalancing_active ? 1 : 0, cnpj || null, razao_social || null, corretora || null
+        );
         res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================================
+// 2.5 ATUALIZAR DADOS CADASTRAIS DO ATIVO (EDIÇÃO DE METADADOS) - NOVO!
+// ============================================================================
+router.put('/:id', (req, res) => {
+    const { name, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora } = req.body;
+    const assetId = req.params.id;
+
+    try {
+        // O 'type' propositalmente não é atualizado para proteger a integridade dos cálculos matemáticos de impostos.
+        db.prepare(`
+            UPDATE Assets 
+            SET name = ?, color = ?, subcategory_id = ?, goal_id = ?, is_rebalancing_active = ?, cnpj = ?, razao_social = ?, corretora = ?
+            WHERE id = ?
+        `).run(
+            name, color, subcategory_id || null, goal_id || null, 
+            is_rebalancing_active ? 1 : 0, cnpj || null, razao_social || null, corretora || null, assetId
+        );
+        res.json({ success: true, message: "Ativo atualizado com sucesso." });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -99,7 +122,6 @@ router.post('/aporte', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
-            // Calcula matematicamente o estado real lendo todo o histórico
             const estadoReal = calcularEstadoMatematico(asset_id, db);
             const qtdAntiga = estadoReal.quantidade;
             const pmAntigo = estadoReal.precoMedio;
@@ -145,10 +167,8 @@ router.post('/venda', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
-            // Calcula o estado real blindando contra "Memórias Fantasmas" do DB
             const estadoReal = calcularEstadoMatematico(asset_id, db);
 
-            // A margem de tolerância (0.00000001) impede erros do JavaScript ao comparar cotas de Fundos e Cripto
             if (qtdVendida > (estadoReal.quantidade + 0.00000001)) {
                 throw new Error(`Você possui ${estadoReal.quantidade.toFixed(4)} cotas, mas tentou vender ${qtdVendida.toFixed(4)}.`);
             }
@@ -218,7 +238,6 @@ router.post('/sync/:id', (req, res) => {
         let tickerLimpo = asset.name.trim().toUpperCase();
         const isCripto = (asset.type === 'Cripto');
 
-        // Puxa a quantidade exata para calcular o saldo projetado
         const qtdExata = calcularEstadoMatematico(asset.id, db).quantidade;
 
         if (isCripto) {
@@ -310,18 +329,13 @@ router.post('/aplicar-sync/:id', (req, res) => {
         if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
 
         db.transaction(() => {
-            // 1. Atualiza o Saldo Atual na carteira (Lógica original)
             db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, asset_id);
 
-            // 2. Tira a "Fotografia" (Snapshot) para o Gráfico de Relatórios (NOVO)
             const qtdExata = calcularEstadoMatematico(asset_id, db).quantidade;
             const precoMercado = qtdExata > 0 ? (novo_saldo / qtdExata) : 0;
             const hoje = new Date().toISOString().split('T')[0];
 
-            // Remove a fotografia anterior de hoje (se existir) para não duplicar dados se você sincronizar 2x no mesmo dia
             db.prepare("DELETE FROM AssetSnapshots WHERE asset_id = ? AND date = ?").run(asset_id, hoje);
-
-            // Salva a nova fotografia na linha do tempo
             db.prepare(`
                 INSERT INTO AssetSnapshots (asset_id, date, quantity, price, total_value)
                 VALUES (?, ?, ?, ?, ?)
@@ -395,17 +409,14 @@ router.delete('/history/:id', (req, res) => {
 
         const assetId = historyItem.asset_id;
 
-        // Estorno proporcional do Saldo Financeiro
         if (historyItem.type === 'contribution') {
             db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(historyItem.amount, assetId);
         } else if (historyItem.type === 'withdrawal') {
             db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(historyItem.amount, assetId);
         }
 
-        // Deleta do Extrato
         db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
 
-        // AUTOCURA DO BANCO DE DADOS: Atualiza o cache do Asset para nunca ficar dessincronizado
         const estadoCurado = calcularEstadoMatematico(assetId, db);
         db.prepare("UPDATE Assets SET total_quantity = ?, avg_price = ? WHERE id = ?").run(estadoCurado.quantidade, estadoCurado.precoMedio, assetId);
 
