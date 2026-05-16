@@ -4,9 +4,13 @@ const db = require('../database');
 const https = require('https');
 
 // ============================================================================
-// FUNÇÃO CENTRAL DE INTEGRIDADE MATEMÁTICA
-// Resolve problemas de precisão de decimais (Cripto/Fundos) e dessincronização de cache.
+// FUNÇÕES DE INTEGRIDADE MATEMÁTICA E SNAPSHOTS
 // ============================================================================
+
+/**
+ * Resolve problemas de precisão de decimais (Cripto/Fundos) e dessincronização de cache.
+ * Varre todo o histórico do ativo e reconstrói o saldo de cotas e PM do zero.
+ */
 function calcularEstadoMatematico(asset_id, dbInstance) {
     const history = dbInstance.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset_id);
     let qty = 0;
@@ -32,6 +36,27 @@ function calcularEstadoMatematico(asset_id, dbInstance) {
     };
 }
 
+/**
+ * [NOVO - FLASH AUTOMÁTICO]
+ * Força o gráfico de Evolução a reconhecer a movimentação imediatamente.
+ * Tira uma "foto" do saldo atual no momento de uma compra/venda e guarda para o BI.
+ */
+function gerarSnapshotHoje(asset_id, dbInstance) {
+    const asset = dbInstance.prepare("SELECT current_balance FROM Assets WHERE id = ?").get(asset_id);
+    if (!asset) return;
+    
+    const estado = calcularEstadoMatematico(asset_id, dbInstance);
+    const hoje = new Date().toISOString().split('T')[0];
+    const price = estado.quantidade > 0 ? (asset.current_balance / estado.quantidade) : 0;
+    
+    // Remove o snapshot de hoje (se houver) para evitar duplicidade e insere o atualizado
+    dbInstance.prepare("DELETE FROM AssetSnapshots WHERE asset_id = ? AND date = ?").run(asset_id, hoje);
+    dbInstance.prepare(`
+        INSERT INTO AssetSnapshots (asset_id, date, quantity, price, total_value)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(asset_id, hoje, estado.quantidade, price, asset.current_balance);
+}
+
 // ============================================================================
 // 1. LISTAGEM DE ATIVOS 
 // ============================================================================
@@ -50,6 +75,7 @@ router.get('/', (req, res) => {
         `).all();
         
         const enriched = assets.map(asset => {
+            // Usa o motor central para enviar dados matemáticos sempre blindados para a tela
             const estadoReal = calcularEstadoMatematico(asset.id, db);
             asset.avg_price = estadoReal.precoMedio;
             asset.total_quantity = estadoReal.quantidade;
@@ -57,59 +83,82 @@ router.get('/', (req, res) => {
         });
 
         res.json(enriched);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 2. CRIAR NOVO ATIVO (Atualizado com IRPF)
+// 2. CRIAR NOVO ATIVO (Com Metadados de IRPF)
 // ============================================================================
 router.post('/', (req, res) => {
     const { name, type, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora } = req.body;
+    
     try {
         db.prepare(`
             INSERT INTO Assets (name, type, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-            name, type, color || '#3b82f6', subcategory_id || null, goal_id || null, 
-            is_rebalancing_active ? 1 : 0, cnpj || null, razao_social || null, corretora || null
+            name, 
+            type, 
+            color || '#3b82f6', 
+            subcategory_id || null, 
+            goal_id || null, 
+            is_rebalancing_active ? 1 : 0,
+            cnpj || null,
+            razao_social || null,
+            corretora || null
         );
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 2.5 ATUALIZAR DADOS CADASTRAIS DO ATIVO (EDIÇÃO DE METADADOS) - NOVO!
+// 3. EDITAR DADOS CADASTRAIS DO ATIVO (EDIÇÃO DE METADADOS)
 // ============================================================================
 router.put('/:id', (req, res) => {
     const { name, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora } = req.body;
     const assetId = req.params.id;
 
     try {
-        // O 'type' propositalmente não é atualizado para proteger a integridade dos cálculos matemáticos de impostos.
+        // O 'type' propositalmente não é atualizado para proteger a integridade dos cálculos de IRPF.
         db.prepare(`
             UPDATE Assets 
             SET name = ?, color = ?, subcategory_id = ?, goal_id = ?, is_rebalancing_active = ?, cnpj = ?, razao_social = ?, corretora = ?
             WHERE id = ?
         `).run(
-            name, color, subcategory_id || null, goal_id || null, 
-            is_rebalancing_active ? 1 : 0, cnpj || null, razao_social || null, corretora || null, assetId
+            name, 
+            color, 
+            subcategory_id || null, 
+            goal_id || null, 
+            is_rebalancing_active ? 1 : 0, 
+            cnpj || null, 
+            razao_social || null, 
+            corretora || null, 
+            assetId
         );
         res.json({ success: true, message: "Ativo atualizado com sucesso." });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 3. EXCLUIR ATIVO
+// 4. EXCLUIR ATIVO DEFINITIVAMENTE
 // ============================================================================
 router.delete('/:id', (req, res) => {
     try {
         db.prepare("DELETE FROM Assets WHERE id = ?").run(req.params.id);
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 4. NOVO APORTE (COMPRA)
+// 5. NOVO APORTE (COMPRA)
 // ============================================================================
 router.post('/aporte', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
@@ -122,6 +171,7 @@ router.post('/aporte', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
+            // Calcula matematicamente o estado real lendo todo o histórico
             const estadoReal = calcularEstadoMatematico(asset_id, db);
             const qtdAntiga = estadoReal.quantidade;
             const pmAntigo = estadoReal.precoMedio;
@@ -132,7 +182,7 @@ router.post('/aporte', (req, res) => {
 
             db.prepare(`
                 UPDATE Assets 
-                SET total_quantity = ?, avg_price = ?, current_balance = ? 
+                SET total_quantity = ?, avg_price = ?, current_balance = ?, status = 'active'
                 WHERE id = ?
             `).run(novaQtdTotal, novoPM, novoSaldo, asset_id);
 
@@ -143,7 +193,11 @@ router.post('/aporte', (req, res) => {
         });
 
         insertTransaction();
-        res.json({ success: true, message: "Aporte registrado e Preço Médio atualizado!" });
+        
+        // [NOVO] Tira a foto do gráfico para o Dashboard atualizar em tempo real!
+        gerarSnapshotHoje(asset_id, db);
+        
+        res.json({ success: true, message: "Aporte registrado com sucesso." });
     } catch (err) {
         console.error("Erro no Aporte:", err.message);
         res.status(500).json({ error: err.message });
@@ -151,7 +205,7 @@ router.post('/aporte', (req, res) => {
 });
 
 // ============================================================================
-// 5. REGISTRAR VENDA (COM TRAVA BLINDADA E TOLERÂNCIA DE DECIMAIS)
+// 6. REGISTRAR VENDA (RESGATE COM IRPF)
 // ============================================================================
 router.post('/venda', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
@@ -167,15 +221,18 @@ router.post('/venda', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
+            // Calcula o estado real blindando contra falhas de ponto flutuante
             const estadoReal = calcularEstadoMatematico(asset_id, db);
 
+            // A margem de tolerância (0.00000001) impede erros do JS ao comparar cotas de Fundos e Cripto
             if (qtdVendida > (estadoReal.quantidade + 0.00000001)) {
-                throw new Error(`Você possui ${estadoReal.quantidade.toFixed(4)} cotas, mas tentou vender ${qtdVendida.toFixed(4)}.`);
+                throw new Error(`Tentativa inválida: Você possui ${estadoReal.quantidade.toFixed(4)} cotas e tentou vender ${qtdVendida.toFixed(4)}.`);
             }
 
             const custoDeAquisicao = qtdVendida * estadoReal.precoMedio;
             lucroRealizado = valorBrutoVenda - custoDeAquisicao;
 
+            // Motor de Impostos Padrão (20% para FIIs, 15% para Ações)
             if (lucroRealizado > 0) {
                 if (['FIIs', 'Fiagro', 'FI-Infra'].includes(asset.type)) {
                     impostoGerado = lucroRealizado * 0.20;
@@ -186,12 +243,13 @@ router.post('/venda', (req, res) => {
 
             const novaQtdTotal = Math.max(0, estadoReal.quantidade - qtdVendida);
             const novoSaldo = novaQtdTotal === 0 ? 0 : asset.current_balance * (novaQtdTotal / estadoReal.quantidade);
+            const novoStatus = novaQtdTotal === 0 ? 'closed' : 'active';
 
             db.prepare(`
                 UPDATE Assets 
-                SET total_quantity = ?, current_balance = ? 
+                SET total_quantity = ?, current_balance = ?, status = ?
                 WHERE id = ?
-            `).run(novaQtdTotal, novoSaldo, asset_id);
+            `).run(novaQtdTotal, novoSaldo, novoStatus, asset_id);
 
             db.prepare(`
                 INSERT INTO EquityHistory (asset_id, type, amount, quantity, lucro, tax_due, date) 
@@ -201,11 +259,13 @@ router.post('/venda', (req, res) => {
 
         sellTransaction();
         
+        // [NOVO] Tira a foto garantindo que o gráfico de Relatórios exiba a queda de patrimônio
+        gerarSnapshotHoje(asset_id, db);
+        
         res.json({ 
             success: true, 
             imposto_gerado: impostoGerado,
-            lucro: lucroRealizado,
-            message: "Venda registrada com sucesso." 
+            lucro: lucroRealizado
         });
     } catch (err) {
         console.error("Erro na Venda:", err.message);
@@ -214,7 +274,7 @@ router.post('/venda', (req, res) => {
 });
 
 // ============================================================================
-// 6. REGISTRAR RENDIMENTO (PROVENTO)
+// 7. REGISTRAR RENDIMENTO (PROVENTO)
 // ============================================================================
 router.post('/rendimento', (req, res) => {
     const { asset_id, amount, date } = req.body;
@@ -224,11 +284,13 @@ router.post('/rendimento', (req, res) => {
             VALUES (?, 'dividend', ?, ?)
         `).run(asset_id, parseFloat(amount), date);
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 7. SINCRONIZAR COTAÇÃO (BRAPI / BINANCE)
+// 8. SINCRONIZAR COTAÇÃO NA BOLSA (BRAPI / BINANCE)
 // ============================================================================
 router.post('/sync/:id', (req, res) => {
     try {
@@ -236,11 +298,9 @@ router.post('/sync/:id', (req, res) => {
         if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
 
         let tickerLimpo = asset.name.trim().toUpperCase();
-        const isCripto = (asset.type === 'Cripto');
-
         const qtdExata = calcularEstadoMatematico(asset.id, db).quantidade;
 
-        if (isCripto) {
+        if (asset.type === 'Cripto') {
             tickerLimpo = tickerLimpo.replace('-', '').replace('BRL', '') + 'BRL';
             const urlBinance = `https://api.binance.com/api/v3/ticker/price?symbol=${tickerLimpo}`;
 
@@ -256,29 +316,23 @@ router.post('/sync/:id', (req, res) => {
                         const jsonData = JSON.parse(data);
                         const precoMercado = parseFloat(jsonData.price);
                         
-                        if (isNaN(precoMercado)) {
-                            return res.status(400).json({ error: "Preço indisponível na Binance hoje." });
-                        }
+                        if (isNaN(precoMercado)) return res.status(400).json({ error: "Preço indisponível na Binance." });
 
                         const novoSaldo = qtdExata * precoMercado;
                         return res.json({ sugerido: precoMercado, novoSaldo: novoSaldo });
-                    } catch (parseErr) {
+                    } catch (err) {
                         return res.status(500).json({ error: "Erro ao interpretar dados da Binance." });
                     }
                 });
-            }).on('error', (err) => {
-                return res.status(500).json({ error: `Falha de conexão com a Binance: ${err.message}` });
-            });
+            }).on('error', (err) => res.status(500).json({ error: `Falha de conexão: ${err.message}` }));
 
         } else {
             const settingsRow = db.prepare("SELECT value FROM Settings WHERE key = 'brapi_token'").get();
-            const BRAPI_TOKEN = settingsRow ? settingsRow.value : '';
-
-            if (!BRAPI_TOKEN) {
-                return res.status(400).json({ error: "Token da Brapi não configurado. Por favor, adicione na página de Parâmetros." });
+            if (!settingsRow || !settingsRow.value) {
+                return res.status(400).json({ error: "Token da Brapi não configurado na página de Parâmetros." });
             }
 
-            const urlBrapi = `https://brapi.dev/api/quote/${tickerLimpo}?token=${BRAPI_TOKEN}`;
+            const urlBrapi = `https://brapi.dev/api/quote/${tickerLimpo}?token=${settingsRow.value}`;
 
             https.get(urlBrapi, (response) => {
                 let data = '';
@@ -289,28 +343,25 @@ router.post('/sync/:id', (req, res) => {
 
                         if (response.statusCode !== 200 || jsonData.error) {
                             const errorMsg = jsonData.message || jsonData.error || 'Erro desconhecido';
-                            return res.status(400).json({ error: `Recusa da Brapi [Status ${response.statusCode}]: ${errorMsg}` });
+                            return res.status(400).json({ error: `Recusa da Brapi: ${errorMsg}` });
                         }
 
                         if (jsonData.results && jsonData.results.length > 0) {
                             const precoMercado = jsonData.results[0].regularMarketPrice;
-                            
                             if (precoMercado === undefined || precoMercado === null) {
-                                return res.status(400).json({ error: "A Brapi encontrou o ativo, mas o preço não está disponível hoje." });
+                                return res.status(400).json({ error: "Ativo encontrado, mas preço indisponível." });
                             }
 
                             const novoSaldo = qtdExata * precoMercado;
                             return res.json({ sugerido: precoMercado, novoSaldo: novoSaldo });
                         } else {
-                            return res.status(400).json({ error: `Ticker '${tickerLimpo}' não encontrado na Bolsa.` });
+                            return res.status(400).json({ error: `Ticker '${tickerLimpo}' não encontrado.` });
                         }
-                    } catch (parseErr) {
-                        return res.status(500).json({ error: "Erro ao interpretar os dados da Brapi." });
+                    } catch (err) {
+                        return res.status(500).json({ error: "Erro ao interpretar dados da Brapi." });
                     }
                 });
-            }).on('error', (err) => {
-                return res.status(500).json({ error: `Falha de conexão: ${err.message}` });
-            });
+            }).on('error', (err) => res.status(500).json({ error: `Falha de conexão: ${err.message}` }));
         }
     } catch (err) { 
         res.status(500).json({ error: err.message }); 
@@ -318,36 +369,26 @@ router.post('/sync/:id', (req, res) => {
 });
 
 // ============================================================================
-// 8. APLICAR NOVO SALDO (ATUALIZAÇÃO MANUAL OU VIA SYNC) + SNAPSHOT
+// 9. APLICAR NOVO SALDO APÓS SINCRONIZAÇÃO E REGISTRAR SNAPSHOT
 // ============================================================================
 router.post('/aplicar-sync/:id', (req, res) => {
-    const { novo_saldo } = req.body;
-    const asset_id = req.params.id;
-    
     try {
-        const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
-        if (!asset) return res.status(404).json({ error: "Ativo não encontrado." });
+        const asset_id = req.params.id;
+        const novo_saldo = req.body.novo_saldo;
 
-        db.transaction(() => {
-            db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, asset_id);
-
-            const qtdExata = calcularEstadoMatematico(asset_id, db).quantidade;
-            const precoMercado = qtdExata > 0 ? (novo_saldo / qtdExata) : 0;
-            const hoje = new Date().toISOString().split('T')[0];
-
-            db.prepare("DELETE FROM AssetSnapshots WHERE asset_id = ? AND date = ?").run(asset_id, hoje);
-            db.prepare(`
-                INSERT INTO AssetSnapshots (asset_id, date, quantity, price, total_value)
-                VALUES (?, ?, ?, ?, ?)
-            `).run(asset_id, hoje, qtdExata, precoMercado, novo_saldo);
-        })();
-
+        db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, asset_id);
+        
+        // O Snapshot também é gerado aqui para marcar a evolução de mercado sem novos aportes
+        gerarSnapshotHoje(asset_id, db);
+        
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 9. EXTRATO HISTÓRICO DE UM ATIVO
+// 10. EXTRATO HISTÓRICO DE UM ATIVO
 // ============================================================================
 router.get('/history/:id', (req, res) => {
     try {
@@ -365,6 +406,7 @@ router.get('/history/:id', (req, res) => {
                 totalQty += (row.quantity || 0);
                 totalInvestido += (row.amount || 0);
             } else if (row.type === 'withdrawal') {
+                // Recálculo fallback de lucro caso não esteja salvo na base (retrocompatibilidade)
                 if (!row.lucro && row.quantity > 0) {
                     const custoAquisicao = (row.quantity || 0) * pmAtual;
                     lucroCalculado = (row.amount || 0) - custoAquisicao;
@@ -387,17 +429,20 @@ router.get('/history/:id', (req, res) => {
             }
         });
 
+        // Ordenação final: mais recentes primeiro
         historicoEnriquecido.sort((a, b) => {
             if (b.date === a.date) return b.id - a.id;
             return new Date(b.date) - new Date(a.date);
         });
 
         res.json(historicoEnriquecido);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 // ============================================================================
-// 10. EXCLUIR ITEM DO HISTÓRICO (SEMPRE RECALCULA O CACHE DO BANCO)
+// 11. EXCLUIR ITEM DO HISTÓRICO (ESTORNO E AUTO-CURA)
 // ============================================================================
 router.delete('/history/:id', (req, res) => {
     try {
@@ -409,19 +454,31 @@ router.delete('/history/:id', (req, res) => {
 
         const assetId = historyItem.asset_id;
 
+        // Estorno proporcional do Saldo Financeiro
         if (historyItem.type === 'contribution') {
             db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(historyItem.amount, assetId);
         } else if (historyItem.type === 'withdrawal') {
             db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(historyItem.amount, assetId);
         }
 
+        // Deleta o lançamento do Extrato
         db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
 
+        // AUTO-CURA DO BANCO DE DADOS: Atualiza o cache do Asset para nunca ficar dessincronizado
         const estadoCurado = calcularEstadoMatematico(assetId, db);
-        db.prepare("UPDATE Assets SET total_quantity = ?, avg_price = ? WHERE id = ?").run(estadoCurado.quantidade, estadoCurado.precoMedio, assetId);
-
+        db.prepare(`
+            UPDATE Assets 
+            SET total_quantity = ?, avg_price = ? 
+            WHERE id = ?
+        `).run(estadoCurado.quantidade, estadoCurado.precoMedio, assetId);
+        
+        // Recalcula a foto do gráfico com a linha do tempo estornada
+        gerarSnapshotHoje(assetId, db); 
+        
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 module.exports = router;
