@@ -25,10 +25,8 @@ function calcularEstadoAteData(asset_id, dataLimite, dbInstance) {
         else if (h.type === 'withdrawal') {
             qty -= (h.quantity || 0);
             if (qty > 0) {
-                // Deduz o valor investido proporcionalmente à quantidade vendida (Custo Médio)
                 invested -= (invested / (qty + (h.quantity || 0))) * (h.quantity || 0);
             } else {
-                // Se zerou a posição, zera o valor investido
                 invested = 0;
             }
         }
@@ -45,21 +43,12 @@ function calcularEstadoAteData(asset_id, dataLimite, dbInstance) {
 // ============================================================================
 router.get('/', (req, res) => {
     try {
-        // --------------------------------------------------------------------
-        // [AUTO-CURA]: Prevenção de "Ponto Cego" no gráfico.
-        // Força o mês corrente do gráfico a bater exatamente com os centavos 
-        // exibidos na tela de Investimentos, caso o usuário não tenha 
-        // sincronizado manualmente hoje.
-        // --------------------------------------------------------------------
         const ativosAtuais = db.prepare("SELECT id, current_balance, total_quantity FROM Assets").all();
         const hoje = new Date().toISOString().split('T')[0];
         
         db.transaction(() => {
             ativosAtuais.forEach(a => {
-                // Verifica se já existe uma "fotografia" do ativo com a data de hoje
                 const check = db.prepare("SELECT id FROM AssetSnapshots WHERE asset_id = ? AND date = ?").get(a.id, hoje);
-                
-                // Se não existir, tira uma fotografia silenciosa com o saldo em cache
                 if (!check) {
                     const price = a.total_quantity > 0 ? (a.current_balance / a.total_quantity) : 0;
                     db.prepare(`
@@ -70,11 +59,6 @@ router.get('/', (req, res) => {
             });
         })();
 
-        // --------------------------------------------------------------------
-        // BUSCA DE DADOS PARA OS GRÁFICOS
-        // --------------------------------------------------------------------
-        
-        // 1. Histórico de Aportes, Vendas e Dividendos
         const evolutionInvestments = db.prepare(`
             SELECT EH.date, EH.amount, EH.type, EH.asset_id, A.name as asset_name
             FROM EquityHistory EH 
@@ -83,15 +67,12 @@ router.get('/', (req, res) => {
             ORDER BY EH.date ASC
         `).all();
 
-        // 2. Fotografias de Valorização (Marcação a Mercado)
-        // O asset_id é exposto aqui para permitir a filtragem por ativo individual na tela
         const snapshots = db.prepare(`
             SELECT date, asset_id, total_value
             FROM AssetSnapshots
             ORDER BY date ASC
         `).all();
 
-        // 3. Dívidas Ativas para o Gráfico de Passivos
         const activeLoans = db.prepare(`
             SELECT * FROM Loans 
             WHERE status != 'quitted' AND status != 'deleted'
@@ -106,6 +87,7 @@ router.get('/', (req, res) => {
 
 // ============================================================================
 // 2. ROTA ASSISTENTE DE IRPF (AUDITORIA E DECLARAÇÃO)
+// Agora enxergando Opções e separando a Isenção de 20k!
 // ============================================================================
 router.get('/irpf/:ano', (req, res) => {
     const ano = req.params.ano; 
@@ -113,7 +95,7 @@ router.get('/irpf/:ano', (req, res) => {
 
     try {
         // --------------------------------------------------------------------
-        // ABA 1: BENS E DIREITOS (Posição estática no dia 31/12 do ano base)
+        // ABA 1: BENS E DIREITOS (Ativos + Opções Lançadas)
         // --------------------------------------------------------------------
         const todosAtivos = db.prepare("SELECT id, name, type, razao_social, cnpj, corretora FROM Assets").all();
         const bens = [];
@@ -123,18 +105,38 @@ router.get('/irpf/:ano', (req, res) => {
             if (estadoFinal.quantidade > 0) {
                 bens.push({ 
                     ...ativo, 
+                    natureza: 'ativo',
                     quantidade: estadoFinal.quantidade, 
                     precoMedio: estadoFinal.precoMedio, 
                     totalInvestido: estadoFinal.quantidade * estadoFinal.precoMedio 
                 });
             }
         });
+
+        // [NOVO] Adicionando Opções abertas em 31/12 como "Dívidas/Ônus"
+        let opcoesAbertas = [];
+        try {
+            opcoesAbertas = db.prepare(`
+                SELECT * FROM OptionsContracts 
+                WHERE open_date <= ? AND (status = 'active' OR expiration_date > ?)
+            `).all(dataCorte, dataCorte);
+            
+            opcoesAbertas.forEach(op => {
+                bens.push({
+                    id: `opt_${op.id}`,
+                    natureza: 'opcao',
+                    name: op.ticker,
+                    type: op.type === 'call' ? 'Venda Coberta (Call)' : 'Venda Garantida (Put)',
+                    quantidade: op.quantity,
+                    totalInvestido: op.total_premium // Na declaração, o saldo é o prêmio recebido
+                });
+            });
+        } catch(e) { console.warn("Tabela de Opções não encontrada."); }
         
-        // Ordena os bens do maior valor investido para o menor
         bens.sort((a, b) => b.totalInvestido - a.totalInvestido);
 
         // --------------------------------------------------------------------
-        // ABA 2: PROVENTOS (Soma de Dividendos recebidos dentro do ano base)
+        // ABA 2: PROVENTOS (Dividendos e Rendimentos)
         // --------------------------------------------------------------------
         const proventos = db.prepare(`
             SELECT A.name, A.type, A.razao_social, A.cnpj, A.corretora, SUM(EH.amount) as total_recebido
@@ -146,34 +148,75 @@ router.get('/irpf/:ano', (req, res) => {
         `).all(ano);
 
         // --------------------------------------------------------------------
-        // ABA 3: VENDAS (Ganhos de Capital agrupados por mês de competência)
+        // ABA 3: VENDAS (Ganhos de Capital Separados: Ações vs Outros/Opções)
         // --------------------------------------------------------------------
         const vendas = [];
-        const mesesNomes = [
-            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-        ];
+        const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         
         for (let i = 1; i <= 12; i++) {
             const mesStr = i.toString().padStart(2, '0');
             
-            // Soma o total vendido, o lucro/prejuízo alcançado e o IR devido daquele mês específico
-            const resumoMes = db.prepare(`
-                SELECT SUM(amount) as total_vendido, SUM(lucro) as total_lucro, SUM(tax_due) as total_imposto
-                FROM EquityHistory 
-                WHERE type = 'withdrawal' AND strftime('%Y', date) = ? AND strftime('%m', date) = ?
-            `).get(ano, mesStr);
+            // 1. Vendas de Spot (Separado por Ações vs FIIs/BDRs)
+            const vendasSpot = db.prepare(`
+                SELECT A.type, SUM(EH.amount) as total_vendido, SUM(EH.lucro) as total_lucro, SUM(EH.tax_due) as total_imposto
+                FROM EquityHistory EH
+                JOIN Assets A ON EH.asset_id = A.id
+                WHERE EH.type = 'withdrawal' AND strftime('%Y', EH.date) = ? AND strftime('%m', EH.date) = ?
+                GROUP BY A.type
+            `).all(ano, mesStr);
+
+            let volVendaAcoes = 0; let lucroAcoes = 0; let impostoAcoes = 0;
+            let volVendaOutros = 0; let lucroOutros = 0; let impostoOutros = 0;
+
+            vendasSpot.forEach(v => {
+                if (v.type === 'Ações') {
+                    volVendaAcoes += (v.total_vendido || 0);
+                    lucroAcoes += (v.total_lucro || 0);
+                    impostoAcoes += (v.total_imposto || 0);
+                } else {
+                    volVendaOutros += (v.total_vendido || 0);
+                    lucroOutros += (v.total_lucro || 0);
+                    impostoOutros += (v.total_imposto || 0);
+                }
+            });
+
+            // 2. [NOVO] Adicionando Lucros de Opções (Sempre Tributáveis)
+            let lucroOpcoes = 0; let impostoOpcoes = 0;
+            try {
+                // Busca Opções Expiradas (Virou pó = lucro total)
+                const expiredOpts = db.prepare(`
+                    SELECT SUM(total_premium) as lucro FROM OptionsContracts 
+                    WHERE status = 'expired' AND strftime('%Y', expiration_date) = ? AND strftime('%m', expiration_date) = ?
+                `).get(ano, mesStr);
+                
+                // Busca Opções Recompradas (Closed = lucro realizado gravado)
+                const closedOpts = db.prepare(`
+                    SELECT SUM(realized_profit) as lucro FROM OptionsContracts 
+                    WHERE status = 'closed' AND strftime('%Y', expiration_date) = ? AND strftime('%m', expiration_date) = ?
+                `).get(ano, mesStr);
+
+                lucroOpcoes = (expiredOpts?.lucro || 0) + (closedOpts?.lucro || 0);
+                // Calcula o IR de 15% apenas se o resultado da opção for lucro
+                if (lucroOpcoes > 0) impostoOpcoes = lucroOpcoes * 0.15;
+
+            } catch(e) {}
 
             vendas.push({ 
                 mesNumero: i, 
                 mesNome: mesesNomes[i - 1], 
-                total_vendido: resumoMes.total_vendido || 0, 
-                total_lucro: resumoMes.total_lucro || 0, 
-                total_imposto: resumoMes.total_imposto || 0 
+                
+                // Cesta Ações (Com isenção de 20k)
+                acoes_total_vendido: volVendaAcoes, 
+                acoes_total_lucro: lucroAcoes, 
+                acoes_total_imposto: impostoAcoes, 
+                
+                // Cesta Tributável Direta (FIIs, BDRs + Opções)
+                tributavel_total_vendido: volVendaOutros, // Volume de FIIs
+                tributavel_total_lucro: lucroOutros + lucroOpcoes, 
+                tributavel_total_imposto: impostoOutros + impostoOpcoes
             });
         }
 
-        // Retorna todos os blocos formatados para o Modal de IRPF no Frontend
         res.json({ bens, proventos, vendas });
         
     } catch (err) { 

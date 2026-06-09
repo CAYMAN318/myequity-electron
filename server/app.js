@@ -18,16 +18,16 @@ const dashboardRoutes = require('./routes/dashboard');
 const dividasRoutes = require('./routes/dividas');
 const ativosRoutes = require('./routes/ativos');
 const parametrosRouter = require('./routes/parametros');
-// NOVA ROTA: Relatórios Analíticos
 const relatoriosRoutes = require('./routes/relatorios');
+const derivativosRoutes = require('./routes/derivativos'); // NOVA ROTA: Derivativos
 
-// Roteamento da API para Ativos, Dívidas, Dashboard e Relatórios
+// Roteamento da API para Ativos, Dívidas, Dashboard, Relatórios e Derivativos
 app.use('/api/dashboard-patrimonial', dashboardRoutes);
 app.use('/api/dividas', dividasRoutes);
 app.use('/api/ativos', ativosRoutes); 
 app.use('/api/parametros', parametrosRouter);
-// NOVA API Mapeada
 app.use('/api/relatorios', relatoriosRoutes);
+app.use('/api/derivativos', derivativosRoutes); // NOVA API Mapeada
 
 // Fallback para abrir a index.html (SPA Pattern)
 app.get('/', (req, res) => {
@@ -53,10 +53,10 @@ const startServer = (port = 3001) => {
 const stopServer = () => {
     if (serverInstance) {
         serverInstance.close(() => {
-            console.log(`>>> [MYEQUITY] Servidor encerrado.`);
+            console.log('>>> [MYEQUITY] Servidor encerrado.');
         });
         serverInstance = null;
     }
 };
 
-module.exports = { startServer, stopServer, app };
+module.exports = { app, startServer, stopServer };

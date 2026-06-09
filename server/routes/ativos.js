@@ -7,10 +7,6 @@ const https = require('https');
 // FUNÇÕES DE INTEGRIDADE MATEMÁTICA E SNAPSHOTS
 // ============================================================================
 
-/**
- * Resolve problemas de precisão de decimais (Cripto/Fundos) e dessincronização de cache.
- * Varre todo o histórico do ativo e reconstrói o saldo de cotas e PM do zero.
- */
 function calcularEstadoMatematico(asset_id, dbInstance) {
     const history = dbInstance.prepare("SELECT * FROM EquityHistory WHERE asset_id = ? ORDER BY date ASC, id ASC").all(asset_id);
     let qty = 0;
@@ -36,11 +32,6 @@ function calcularEstadoMatematico(asset_id, dbInstance) {
     };
 }
 
-/**
- * [NOVO - FLASH AUTOMÁTICO]
- * Força o gráfico de Evolução a reconhecer a movimentação imediatamente.
- * Tira uma "foto" do saldo atual no momento de uma compra/venda e guarda para o BI.
- */
 function gerarSnapshotHoje(asset_id, dbInstance) {
     const asset = dbInstance.prepare("SELECT current_balance FROM Assets WHERE id = ?").get(asset_id);
     if (!asset) return;
@@ -49,7 +40,6 @@ function gerarSnapshotHoje(asset_id, dbInstance) {
     const hoje = new Date().toISOString().split('T')[0];
     const price = estado.quantidade > 0 ? (asset.current_balance / estado.quantidade) : 0;
     
-    // Remove o snapshot de hoje (se houver) para evitar duplicidade e insere o atualizado
     dbInstance.prepare("DELETE FROM AssetSnapshots WHERE asset_id = ? AND date = ?").run(asset_id, hoje);
     dbInstance.prepare(`
         INSERT INTO AssetSnapshots (asset_id, date, quantity, price, total_value)
@@ -58,7 +48,7 @@ function gerarSnapshotHoje(asset_id, dbInstance) {
 }
 
 // ============================================================================
-// 1. LISTAGEM DE ATIVOS 
+// 1. LISTAGEM DE ATIVOS (COM CÁLCULO DE GARANTIAS DE DERIVATIVOS)
 // ============================================================================
 router.get('/', (req, res) => {
     try {
@@ -74,11 +64,41 @@ router.get('/', (req, res) => {
             ORDER BY A.status, A.name
         `).all();
         
+        // [INTEGRAÇÃO]: Busca todos os contratos de Venda Coberta (Call) e Venda de Put ativos
+        let activeCalls = [];
+        let activePuts = [];
+        try {
+            // Conta as ações travadas em Calls (Garantia Física)
+            activeCalls = db.prepare(`
+                SELECT asset_base, SUM(quantity) as locked_qty
+                FROM OptionsContracts
+                WHERE type = 'call' AND status = 'active'
+                GROUP BY asset_base
+            `).all();
+
+            // Soma o dinheiro travado em Puts atrelado a um CDB/Caixa (Garantia Financeira)
+            activePuts = db.prepare(`
+                SELECT guarantee_asset_id, SUM(quantity * strike_price) as locked_financial
+                FROM OptionsContracts
+                WHERE type = 'put' AND status = 'active' AND guarantee_asset_id IS NOT NULL
+                GROUP BY guarantee_asset_id
+            `).all();
+        } catch (e) { console.warn("Tabela OptionsContracts ausente no momento."); }
+
         const enriched = assets.map(asset => {
-            // Usa o motor central para enviar dados matemáticos sempre blindados para a tela
             const estadoReal = calcularEstadoMatematico(asset.id, db);
             asset.avg_price = estadoReal.precoMedio;
             asset.total_quantity = estadoReal.quantidade;
+            
+            // [CADEADO FÍSICO]: Ações presas em Calls
+            const callLock = activeCalls.find(c => c.asset_base === asset.name);
+            asset.locked_quantity = callLock ? callLock.locked_qty : 0;
+            asset.available_quantity = Math.max(0, asset.total_quantity - asset.locked_quantity);
+
+            // [CADEADO FINANCEIRO]: Dinheiro de Renda Fixa preso em Puts
+            const putLock = activePuts.find(p => p.guarantee_asset_id === asset.id);
+            asset.locked_value = putLock ? putLock.locked_financial : 0;
+
             return asset;
         });
 
@@ -99,15 +119,8 @@ router.post('/', (req, res) => {
             INSERT INTO Assets (name, type, color, subcategory_id, goal_id, is_rebalancing_active, cnpj, razao_social, corretora) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-            name, 
-            type, 
-            color || '#3b82f6', 
-            subcategory_id || null, 
-            goal_id || null, 
-            is_rebalancing_active ? 1 : 0,
-            cnpj || null,
-            razao_social || null,
-            corretora || null
+            name, type, color || '#3b82f6', subcategory_id || null, goal_id || null, 
+            is_rebalancing_active ? 1 : 0, cnpj || null, razao_social || null, corretora || null
         );
         res.json({ success: true });
     } catch (err) { 
@@ -123,21 +136,13 @@ router.put('/:id', (req, res) => {
     const assetId = req.params.id;
 
     try {
-        // O 'type' propositalmente não é atualizado para proteger a integridade dos cálculos de IRPF.
         db.prepare(`
             UPDATE Assets 
             SET name = ?, color = ?, subcategory_id = ?, goal_id = ?, is_rebalancing_active = ?, cnpj = ?, razao_social = ?, corretora = ?
             WHERE id = ?
         `).run(
-            name, 
-            color, 
-            subcategory_id || null, 
-            goal_id || null, 
-            is_rebalancing_active ? 1 : 0, 
-            cnpj || null, 
-            razao_social || null, 
-            corretora || null, 
-            assetId
+            name, color, subcategory_id || null, goal_id || null, 
+            is_rebalancing_active ? 1 : 0, cnpj || null, razao_social || null, corretora || null, assetId
         );
         res.json({ success: true, message: "Ativo atualizado com sucesso." });
     } catch (err) { 
@@ -171,7 +176,6 @@ router.post('/aporte', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
-            // Calcula matematicamente o estado real lendo todo o histórico
             const estadoReal = calcularEstadoMatematico(asset_id, db);
             const qtdAntiga = estadoReal.quantidade;
             const pmAntigo = estadoReal.precoMedio;
@@ -193,8 +197,6 @@ router.post('/aporte', (req, res) => {
         });
 
         insertTransaction();
-        
-        // [NOVO] Tira a foto do gráfico para o Dashboard atualizar em tempo real!
         gerarSnapshotHoje(asset_id, db);
         
         res.json({ success: true, message: "Aporte registrado com sucesso." });
@@ -205,7 +207,7 @@ router.post('/aporte', (req, res) => {
 });
 
 // ============================================================================
-// 6. REGISTRAR VENDA (RESGATE COM IRPF)
+// 6. REGISTRAR VENDA (COM IRPF E TRAVA DE DERIVATIVOS DUPLA)
 // ============================================================================
 router.post('/venda', (req, res) => {
     const { asset_id, quantity, price, date } = req.body;
@@ -221,18 +223,42 @@ router.post('/venda', (req, res) => {
             const asset = db.prepare("SELECT * FROM Assets WHERE id = ?").get(asset_id);
             if (!asset) throw new Error("Ativo não encontrado.");
 
-            // Calcula o estado real blindando contra falhas de ponto flutuante
             const estadoReal = calcularEstadoMatematico(asset_id, db);
 
-            // A margem de tolerância (0.00000001) impede erros do JS ao comparar cotas de Fundos e Cripto
-            if (qtdVendida > (estadoReal.quantidade + 0.00000001)) {
-                throw new Error(`Tentativa inválida: Você possui ${estadoReal.quantidade.toFixed(4)} cotas e tentou vender ${qtdVendida.toFixed(4)}.`);
+            // [INTEGRAÇÃO DE SEGURANÇA MÁXIMA]
+            let lockedQty = 0;       // Travado por Call
+            let lockedFinancial = 0; // Travado por Put
+            try {
+                // 1. Checa a trava física (Se for uma ação)
+                const callLock = db.prepare(`SELECT SUM(quantity) as locked_qty FROM OptionsContracts WHERE type = 'call' AND status = 'active' AND asset_base = ?`).get(asset.name);
+                lockedQty = callLock ? (callLock.locked_qty || 0) : 0;
+
+                // 2. Checa a trava financeira (Se for um CDB/Renda Fixa/Caixa)
+                const putLock = db.prepare(`SELECT SUM(quantity * strike_price) as locked_financial FROM OptionsContracts WHERE type = 'put' AND status = 'active' AND guarantee_asset_id = ?`).get(asset.id);
+                lockedFinancial = putLock ? (putLock.locked_financial || 0) : 0;
+            } catch (e) { /* Fallback caso a tabela não exista */ }
+
+            // Verifica o Bloqueio Físico (Para as ações atreladas em Calls)
+            const availableQty = estadoReal.quantidade - lockedQty;
+            if (qtdVendida > (availableQty + 0.00000001)) {
+                if (lockedQty > 0) {
+                    throw new Error(`Operação Bloqueada (Garantia de Call): Você tem ${estadoReal.quantidade.toFixed(2)} cotas, mas ${lockedQty} estão presas como margem na Mesa Tática. Disponível: ${availableQty.toFixed(2)}.`);
+                } else {
+                    throw new Error(`Tentativa inválida: Você tentou vender ${qtdVendida.toFixed(4)}, mas possui apenas ${estadoReal.quantidade.toFixed(4)}.`);
+                }
             }
 
+            // Verifica o Bloqueio Financeiro (Para Renda Fixa/Caixa atrelado em Puts)
+            const availableFinancial = asset.current_balance - lockedFinancial;
+            if (valorBrutoVenda > (availableFinancial + 0.01)) {
+                throw new Error(`Operação Bloqueada (Garantia de Put): Seu saldo atual é de R$ ${asset.current_balance.toFixed(2)}, mas R$ ${lockedFinancial.toFixed(2)} estão presos como margem na Mesa Tática. Resgate livre: R$ ${availableFinancial.toFixed(2)}.`);
+            }
+
+            // Calculando Custo e Lucro (Respeitando a Matemática da RFB)
             const custoDeAquisicao = qtdVendida * estadoReal.precoMedio;
             lucroRealizado = valorBrutoVenda - custoDeAquisicao;
 
-            // Motor de Impostos Padrão (20% para FIIs, 15% para Ações)
+            // Motor de Impostos Padrão
             if (lucroRealizado > 0) {
                 if (['FIIs', 'Fiagro', 'FI-Infra'].includes(asset.type)) {
                     impostoGerado = lucroRealizado * 0.20;
@@ -258,8 +284,6 @@ router.post('/venda', (req, res) => {
         });
 
         sellTransaction();
-        
-        // [NOVO] Tira a foto garantindo que o gráfico de Relatórios exiba a queda de patrimônio
         gerarSnapshotHoje(asset_id, db);
         
         res.json({ 
@@ -377,8 +401,6 @@ router.post('/aplicar-sync/:id', (req, res) => {
         const novo_saldo = req.body.novo_saldo;
 
         db.prepare("UPDATE Assets SET current_balance = ? WHERE id = ?").run(novo_saldo, asset_id);
-        
-        // O Snapshot também é gerado aqui para marcar a evolução de mercado sem novos aportes
         gerarSnapshotHoje(asset_id, db);
         
         res.json({ success: true });
@@ -406,12 +428,10 @@ router.get('/history/:id', (req, res) => {
                 totalQty += (row.quantity || 0);
                 totalInvestido += (row.amount || 0);
             } else if (row.type === 'withdrawal') {
-                // Recálculo fallback de lucro caso não esteja salvo na base (retrocompatibilidade)
                 if (!row.lucro && row.quantity > 0) {
                     const custoAquisicao = (row.quantity || 0) * pmAtual;
                     lucroCalculado = (row.amount || 0) - custoAquisicao;
                 }
-
                 totalQty -= (row.quantity || 0);
                 if (totalQty > 0) {
                     totalInvestido -= pmAtual * (row.quantity || 0);
@@ -421,15 +441,10 @@ router.get('/history/:id', (req, res) => {
             }
 
             if (['contribution', 'withdrawal', 'dividend'].includes(row.type)) {
-                historicoEnriquecido.push({
-                    ...row,
-                    ir_devido: row.tax_due || 0,
-                    lucro: lucroCalculado
-                });
+                historicoEnriquecido.push({ ...row, ir_devido: row.tax_due || 0, lucro: lucroCalculado });
             }
         });
 
-        // Ordenação final: mais recentes primeiro
         historicoEnriquecido.sort((a, b) => {
             if (b.date === a.date) return b.id - a.id;
             return new Date(b.date) - new Date(a.date);
@@ -447,24 +462,18 @@ router.get('/history/:id', (req, res) => {
 router.delete('/history/:id', (req, res) => {
     try {
         const historyItem = db.prepare("SELECT * FROM EquityHistory WHERE id = ?").get(req.params.id);
-        
-        if (!historyItem) {
-            return res.status(404).json({ error: "Registro não encontrado." });
-        }
+        if (!historyItem) return res.status(404).json({ error: "Registro não encontrado." });
 
         const assetId = historyItem.asset_id;
 
-        // Estorno proporcional do Saldo Financeiro
         if (historyItem.type === 'contribution') {
             db.prepare("UPDATE Assets SET current_balance = MAX(0, current_balance - ?) WHERE id = ?").run(historyItem.amount, assetId);
         } else if (historyItem.type === 'withdrawal') {
             db.prepare("UPDATE Assets SET current_balance = current_balance + ? WHERE id = ?").run(historyItem.amount, assetId);
         }
 
-        // Deleta o lançamento do Extrato
         db.prepare("DELETE FROM EquityHistory WHERE id = ?").run(req.params.id);
 
-        // AUTO-CURA DO BANCO DE DADOS: Atualiza o cache do Asset para nunca ficar dessincronizado
         const estadoCurado = calcularEstadoMatematico(assetId, db);
         db.prepare(`
             UPDATE Assets 
@@ -472,9 +481,7 @@ router.delete('/history/:id', (req, res) => {
             WHERE id = ?
         `).run(estadoCurado.quantidade, estadoCurado.precoMedio, assetId);
         
-        // Recalcula a foto do gráfico com a linha do tempo estornada
         gerarSnapshotHoje(assetId, db); 
-        
         res.json({ success: true });
     } catch (err) { 
         res.status(500).json({ error: err.message }); 

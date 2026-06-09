@@ -11,204 +11,288 @@
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        .card-dash { background: white; border-radius: 24px; border: 1px solid #f1f5f9; transition: all 0.3s ease; }
-        .card-dash:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); }
+        .card-dash { background: white; border-radius: 20px; border: 1px solid #e2e8f0; transition: all 0.2s ease; }
+        .card-dash:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
         span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.6); }
         .progress-bar-bg { background-color: #e2e8f0; border-radius: 9999px; overflow: hidden; height: 8px; }
         .progress-bar-fill { height: 100%; transition: width 0.5s ease-in-out; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
 </head>
 <body class="p-8 text-left">
 
-    <div id="app" class="max-w-7xl mx-auto space-y-6">
+    <div id="app" class="max-w-7xl mx-auto space-y-8">
         
-        <!-- CABEÇALHO -->
-        <div class="flex justify-between items-end mb-8">
+        <!-- CABEÇALHO (TOPO) -->
+        <div class="flex justify-between items-end">
             <div>
-                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Business Intelligence</h1>
-                <p class="text-slate-500 mt-1">Visão global do seu patrimônio atual, alertas e metas.</p>
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Executive Dashboard</h1>
+                <p class="text-slate-500 mt-1">Visão consolidada do seu patrimônio, derivativos e tributação.</p>
             </div>
-            <div class="text-right">
-                <p class="text-sm font-medium text-slate-500">Patrimônio Líquido Real (Ativos - Dívidas)</p>
-                <p class="text-3xl font-black text-blue-600 tracking-tight">{{ formatarMoeda(data.totalAtivos - data.totalDividas) }}</p>
-            </div>
-        </div>
-
-        <!-- ANDAR 1: KPIs GERAIS -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div class="card-dash p-6 border-t-4 border-blue-500">
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                        <span class="icon-wrapper" v-html="getIcon('briefcase')"></span>
-                    </div>
-                    <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">Ativos Brutos</p>
-                </div>
-                <p class="text-2xl font-black text-slate-800 mt-2">{{ formatarMoeda(data.totalAtivos) }}</p>
-            </div>
-
-            <div class="card-dash p-6 border-t-4 border-rose-500">
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                        <span class="icon-wrapper" v-html="getIcon('credit-card')"></span>
-                    </div>
-                    <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">Dívidas & Passivos</p>
-                </div>
-                <p class="text-2xl font-black text-slate-800 mt-2">{{ formatarMoeda(data.totalDividas) }}</p>
-            </div>
-
-            <div class="card-dash p-6 border-t-4 border-emerald-500">
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                        <span class="icon-wrapper" v-html="getIcon('trending-up')"></span>
-                    </div>
-                    <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">Proventos Totais</p>
-                </div>
-                <p class="text-2xl font-black text-slate-800 mt-2">{{ formatarMoeda(data.totalRendimentos) }}</p>
-            </div>
-
-            <div class="card-dash p-6 border-t-4 border-amber-500 relative cursor-pointer hover:bg-amber-50" @click="abrirModalImpostos">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-                            <span class="icon-wrapper" v-html="getIcon('alert-triangle')"></span>
-                        </div>
-                        <p class="text-sm font-bold text-slate-500 uppercase tracking-wider">IR a Recolher</p>
-                    </div>
-                    <span class="icon-wrapper text-amber-300" v-html="getIcon('external-link', 16)"></span>
-                </div>
-                <p class="text-2xl font-black text-amber-600 mt-2">{{ formatarMoeda(data.totalImpostosDevidos) }}</p>
+            <div class="text-right flex flex-col items-end">
+                <p class="text-sm font-medium text-slate-500">Patrimônio Líquido Total</p>
+                <p class="text-4xl font-black text-slate-800 tracking-tight">
+                    {{ formatarMoeda((data.totalAtivos || 0) - (data.totalDividas || 0)) }}
+                </p>
             </div>
         </div>
 
-        <!-- ANDAR 2: REBALANCEAMENTO E BUCKETING -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <!-- REBALANCEAMENTO -->
-            <div class="card-dash p-6">
-                <div class="flex justify-between items-end mb-6">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-800">Motor de Rebalanceamento</h3>
-                        <p class="text-xs text-slate-500">Distanciamento das metas ideais por subcategoria.</p>
-                    </div>
-                    <span class="icon-wrapper text-blue-400" v-html="getIcon('sliders', 24)"></span>
-                </div>
-                
-                <div v-if="data.rebalanceModule.length === 0" class="text-center py-6 text-slate-400 text-sm">
-                    Nenhuma subcategoria com meta percentual definida.
-                </div>
-
-                <div class="space-y-4 max-h-72 overflow-y-auto custom-scrollbar pr-2">
-                    <div v-for="(cat, idx) in rebalanceCalculado" :key="idx">
-                        <div class="flex justify-between text-xs font-bold mb-1">
-                            <span class="text-slate-700">{{ cat.category }}</span>
-                            <span :class="cat.statusColor">{{ cat.pctAtual.toFixed(1) }}% / {{ cat.target_pct }}% (Alvo)</span>
-                        </div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill" :style="{ width: Math.min(cat.pctAtual, 100) + '%', backgroundColor: cat.barColor }"></div>
-                        </div>
-                        <p class="text-[10px] text-right mt-1" :class="cat.statusColor">
-                            {{ cat.recomendacao }} {{ formatarMoeda(Math.abs(cat.diferencaFinanceira)) }}
-                        </p>
-                    </div>
-                </div>
+        <!-- 1ª LINHA: SPOT E PASSIVOS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="card-dash p-6 border-l-4 border-blue-500">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Total em Ativos (Spot)</p>
+                <h2 class="text-2xl font-black text-slate-800">{{ formatarMoeda(data.totalAtivos) }}</h2>
+                <p class="text-xs text-slate-500 mt-2 flex items-center gap-1"><span class="icon-wrapper text-blue-500" v-html="getIcon('briefcase', 14)"></span> Mercado à Vista</p>
             </div>
 
-            <!-- BUCKETING (METAS) -->
-            <div class="card-dash p-6">
-                <div class="flex justify-between items-end mb-6">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-800">Objetivos Financeiros (Bucketing)</h3>
-                        <p class="text-xs text-slate-500">Progresso do capital alocado para cada meta de vida.</p>
-                    </div>
-                    <span class="icon-wrapper text-emerald-400" v-html="getIcon('target', 24)"></span>
-                </div>
+            <div class="card-dash p-6 border-l-4 border-rose-500">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Passivos Totais</p>
+                <h2 class="text-2xl font-black text-slate-800">{{ formatarMoeda(data.totalDividas) }}</h2>
+                <p class="text-xs text-rose-500 mt-2 flex items-center gap-1"><span class="icon-wrapper" v-html="getIcon('credit-card', 14)"></span> Obrigações de Longo Prazo</p>
+            </div>
 
-                <div v-if="data.goalsModule.length === 0" class="text-center py-6 text-slate-400 text-sm">
-                    Nenhum ativo alocado em metas específicas.
-                </div>
-
-                <div class="space-y-4 max-h-72 overflow-y-auto custom-scrollbar pr-2">
-                    <div v-for="(goal, idx) in data.goalsModule" :key="idx" v-show="goal.target_amount > 0">
-                        <div class="flex justify-between text-xs font-bold mb-1">
-                            <span class="text-slate-700">{{ goal.goal }}</span>
-                            <span class="text-emerald-600">{{ formatarMoeda(goal.current_amount) }} / {{ formatarMoeda(goal.target_amount) }}</span>
-                        </div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill bg-emerald-500" :style="{ width: Math.min((goal.current_amount / goal.target_amount) * 100, 100) + '%' }"></div>
-                        </div>
-                        <p class="text-[10px] text-slate-500 text-right mt-1">
-                            {{ ((goal.current_amount / goal.target_amount) * 100).toFixed(1) }}% concluído
-                        </p>
-                    </div>
-                </div>
+            <div class="card-dash p-6 border-l-4 border-emerald-500">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Proventos Recebidos</p>
+                <h2 class="text-2xl font-black text-slate-800">{{ formatarMoeda(data.totalRendimentos) }}</h2>
+                <p class="text-xs text-emerald-600 mt-2 flex items-center gap-1"><span class="icon-wrapper" v-html="getIcon('banknote', 14)"></span> Dividendos & JCP</p>
             </div>
         </div>
 
-        <!-- ANDAR 3: DISTRIBUIÇÃO (PIZZAS MACRO E MICRO) -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+        <!-- 2ª LINHA: DERIVATIVOS -->
+        <div class="mt-8 mb-4">
+            <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span class="icon-wrapper text-teal-600" v-html="getIcon('candlestick-chart', 20)"></span> 
+                Operações com Opções (Derivativos)
+            </h2>
+            <p class="text-sm text-slate-500">Mesa Tática e Venda Coberta em andamento.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="card-dash p-6 border-l-4 border-teal-500">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Contratos Ativos</p>
+                <h2 class="text-2xl font-black text-slate-800">{{ data.derivativosStats ? data.derivativosStats.qtd_contratos : 0 }}</h2>
+                <p class="text-xs text-teal-600 mt-2 flex items-center gap-1"><span class="icon-wrapper" v-html="getIcon('layers', 14)"></span> Mesa Tática</p>
+            </div>
+
+            <div class="card-dash p-6 border-l-4 border-slate-700">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Garantias Travadas (Puts)</p>
+                <h2 class="text-2xl font-black text-slate-800">{{ formatarMoeda(data.derivativosStats ? data.derivativosStats.margem_travada : 0) }}</h2>
+                <p class="text-xs text-slate-500 mt-2 flex items-center gap-1"><span class="icon-wrapper" v-html="getIcon('lock', 14)"></span> Margem de Risco</p>
+            </div>
+
+            <div class="card-dash p-6 border-l-4 border-indigo-500 bg-gradient-to-br from-white to-indigo-50/20">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Prêmios em Aberto</p>
+                <h2 class="text-2xl font-black text-indigo-700">{{ formatarMoeda(data.derivativosStats ? data.derivativosStats.premios_ativos : 0) }}</h2>
+                <p class="text-xs text-indigo-500 mt-2 flex items-center gap-1"><span class="icon-wrapper" v-html="getIcon('zap', 14)"></span> Receita Esperada</p>
+            </div>
+        </div>
+
+        <!-- 3ª LINHA: TRIBUTAÇÃO E ESCUDO FISCAL -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="card-dash p-6 border-l-4 border-amber-500 cursor-pointer hover:bg-amber-50/50" @click="abrirModalImpostos('acoes')">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">IR FIIs / Ações</p>
+                <h2 class="text-2xl font-black text-amber-600">{{ formatarMoeda(data.totalImpostosDevidos) }}</h2>
+                <p class="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1">Ver DARFs Pendentes <span class="icon-wrapper" v-html="getIcon('arrow-right', 12)"></span></p>
+            </div>
+
+            <div class="card-dash p-6 border-l-4 border-orange-500 cursor-pointer hover:bg-orange-50/50" @click="abrirModalImpostos('opcoes')">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">IR Opções (Prêmios)</p>
+                <h2 class="text-2xl font-black text-orange-600">{{ formatarMoeda(data.derivativosStats ? data.derivativosStats.ir_opcoes : 0) }}</h2>
+                <p class="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1">Lançamentos Expirados <span class="icon-wrapper" v-html="getIcon('arrow-right', 12)"></span></p>
+            </div>
+
+            <div class="card-dash p-6 border-l-4 border-cyan-500 cursor-pointer hover:bg-cyan-50/50" @click="abrirModalImpostos('escudo')">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Escudo Fiscal</p>
+                <h2 class="text-2xl font-black text-cyan-600">{{ formatarMoeda(Math.abs(data.prejuizoAcumulado)) }}</h2>
+                <p class="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1">Prejuízos a Compensar <span class="icon-wrapper" v-html="getIcon('arrow-right', 12)"></span></p>
+            </div>
+        </div>
+
+        <!-- 4ª LINHA: GRÁFICOS DE PIZZA (ALOCAÇÃO E RISCO) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="card-dash p-6 flex flex-col">
+                <h3 class="text-sm font-bold text-slate-800 mb-4 text-center">Alocação por Classe</h3>
+                <!-- CAIXA COM ALTURA TRAVADA -->
+                <div class="relative w-full h-48">
+                    <canvas id="classesPieChart"></canvas>
+                </div>
+            </div>
             
-            <div class="card-dash p-6 relative">
-                <h3 class="text-sm font-bold text-slate-800 mb-1 text-center">Alocação por Classe</h3>
-                <p class="text-[10px] text-slate-400 text-center mb-4">Ações vs FIIs vs Renda Fixa</p>
-                <div class="relative h-48 w-full flex justify-center items-center">
-                    <canvas id="macroPieChart"></canvas>
+            <div class="card-dash p-6 flex flex-col">
+                <h3 class="text-sm font-bold text-slate-800 mb-4 text-center">Concentração por Ativo (Top 10)</h3>
+                <div class="relative w-full h-48">
+                    <canvas id="ativosPieChart"></canvas>
                 </div>
             </div>
 
-            <div class="card-dash p-6 relative">
-                <h3 class="text-sm font-bold text-slate-800 mb-1 text-center">Concentração por Ativo</h3>
-                <p class="text-[10px] text-slate-400 text-center mb-4">Risco individual em papéis</p>
-                <div class="relative h-48 w-full flex justify-center items-center">
-                    <canvas id="microPieChart"></canvas>
-                </div>
-            </div>
-
-            <div class="card-dash p-6 relative">
-                <h3 class="text-sm font-bold text-slate-800 mb-1 text-center">Composição de Passivos</h3>
-                <p class="text-[10px] text-slate-400 text-center mb-4">Distribuição do saldo devedor</p>
-                <div class="relative h-48 w-full flex justify-center items-center">
+            <div class="card-dash p-6 flex flex-col">
+                <h3 class="text-sm font-bold text-slate-800 mb-4 text-center">Composição dos Passivos</h3>
+                <div class="relative w-full h-48">
                     <canvas id="dividasPieChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- MODAL IMPOSTOS (Mantido intacto) -->
-        <div v-if="modalImpostos.aberto" @click.self="fecharModalImpostos" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-            <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                <div class="p-6 border-b border-amber-100 flex justify-between items-center bg-amber-50">
-                    <div>
-                        <h2 class="text-xl font-bold flex items-center gap-2 text-amber-700">
-                            <span class="icon-wrapper" v-html="getIcon('alert-triangle')"></span>
-                            Imposto de Renda (Provisão)
-                        </h2>
-                        <p class="text-sm mt-1 text-amber-600">Histórico de tributos gerados por vendas com lucro.</p>
+        <!-- 4ª LINHA: REBALANCEAMENTO E BUCKETING -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="card-dash p-6">
+                <h3 class="text-lg font-bold text-slate-800 mb-1">Motor de Rebalanceamento</h3>
+                <p class="text-xs text-slate-500 mb-6">Distanciamento do Alvo (Target).</p>
+                
+                <div class="space-y-4">
+                    <div v-for="classe in rebalanceCalculado" :key="classe.name">
+                        <div class="flex justify-between items-end mb-1">
+                            <h4 class="text-xs font-bold text-slate-700">{{ classe.name }}</h4>
+                            <p class="text-[10px] font-black" :class="classe.diferencaFinanceira >= 0 ? 'text-emerald-600' : 'text-rose-500'">
+                                {{ classe.diferencaFinanceira >= 0 ? 'Passou ' : 'Falta ' }} {{ formatarMoeda(Math.abs(classe.diferencaFinanceira)) }}
+                            </p>
+                        </div>
+                        <div class="progress-bar-bg relative">
+                            <div class="progress-bar-fill absolute top-0 left-0" :style="{ width: Math.min(classe.percentualAtual, 100) + '%', backgroundColor: classe.color || '#3b82f6' }"></div>
+                            <div class="absolute top-0 bottom-0 border-r-2 border-slate-800/30 z-10" :style="{ left: classe.target + '%' }"></div>
+                        </div>
                     </div>
-                    <button @click="fecharModalImpostos" class="text-amber-400 hover:text-amber-600 transition-colors">
-                        <span class="icon-wrapper" v-html="getIcon('x')"></span>
-                    </button>
+                </div>
+            </div>
+
+            <div class="card-dash p-6">
+                <h3 class="text-lg font-bold text-slate-800 mb-1">Objetivos (Bucketing)</h3>
+                <p class="text-xs text-slate-500 mb-6">Progresso das reservas financeiras.</p>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div v-for="goal in data.goalsModule" :key="goal.id" class="p-3 border border-slate-100 rounded-xl bg-slate-50 hover:bg-white transition-colors">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white" :style="{ backgroundColor: goal.color }">
+                                <span class="icon-wrapper" v-html="getIcon(goal.icon, 16)"></span>
+                            </div>
+                            <h4 class="text-xs font-bold text-slate-800 truncate">{{ goal.name }}</h4>
+                        </div>
+                        <div class="progress-bar-bg h-1.5 mb-1">
+                            <div class="progress-bar-fill" :style="{ width: Math.min(((goal.current_saved || 0) / goal.target_value) * 100, 100) + '%', backgroundColor: goal.color }"></div>
+                        </div>
+                        <p class="text-[10px] font-bold text-right" :style="{ color: goal.color }">{{ (((goal.current_saved || 0) / goal.target_value) * 100).toFixed(1) }}%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: CONCILIAÇÃO FISCAL (REFORMULADO COM ABAS) -->
+        <div v-if="modalImpostos.aberto" @click.self="fecharModalImpostos" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                
+                <div class="p-6 border-b border-slate-100 bg-slate-800 text-white flex justify-between items-center">
+                    <div>
+                        <h2 class="text-xl font-bold flex items-center gap-2">
+                            <span class="icon-wrapper" v-html="getIcon('scale')"></span> Extrato Fiscal e DARFs
+                        </h2>
+                        <p class="text-sm mt-1 text-slate-400">Separação de resultados por segmento.</p>
+                    </div>
+                    <button @click="fecharModalImpostos" class="text-slate-400 hover:text-white transition-colors"><span class="icon-wrapper" v-html="getIcon('x')"></span></button>
                 </div>
                 
-                <div class="overflow-y-auto custom-scrollbar flex-grow p-6 bg-slate-50">
-                    <div v-if="data.impostosDetalhados.length === 0" class="text-center py-12 text-slate-400">
-                        <span class="icon-wrapper mb-2 opacity-50" v-html="getIcon('check-circle', 48)"></span>
-                        <p>Nenhuma provisão de imposto pendente no momento.</p>
-                    </div>
+                <!-- MENU DE ABAS DO MODAL -->
+                <div class="flex border-b border-slate-200 bg-slate-50 shrink-0">
+                    <button @click="modalImpostos.abaAtiva = 'acoes'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalImpostos.abaAtiva === 'acoes' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
+                        <span class="icon-wrapper" v-html="getIcon('briefcase', 18)"></span> IR FIIs / Ações
+                    </button>
+                    <button @click="modalImpostos.abaAtiva = 'opcoes'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalImpostos.abaAtiva === 'opcoes' ? 'border-orange-500 text-orange-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
+                        <span class="icon-wrapper" v-html="getIcon('zap', 18)"></span> IR Opções
+                    </button>
+                    <button @click="modalImpostos.abaAtiva = 'escudo'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalImpostos.abaAtiva === 'escudo' ? 'border-cyan-500 text-cyan-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
+                        <span class="icon-wrapper" v-html="getIcon('shield', 18)"></span> Escudo Fiscal (Prejuízos)
+                    </button>
+                </div>
 
-                    <div v-else class="space-y-3">
-                        <div v-for="imp in data.impostosDetalhados" :key="imp.id" class="bg-white border border-amber-200 rounded-2xl p-4 flex justify-between items-center shadow-sm">
-                            <div>
-                                <p class="text-sm font-bold text-slate-800">Venda: {{ imp.asset_name }}</p>
-                                <p class="text-xs text-slate-500 font-medium">{{ imp.date ? imp.date.split('-').reverse().join('/') : '' }}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-base font-black text-amber-600">
-                                    {{ formatarMoeda(imp.ir_devido) }}
-                                </p>
-                                <p class="text-[10px] text-slate-400 mt-1">Bruto: {{ formatarMoeda(imp.valor_venda) }}</p>
+                <div class="overflow-y-auto custom-scrollbar flex-grow p-6 bg-slate-100">
+                    
+                    <!-- ABA A: AÇÕES E FIIS (SOMENTE LUCROS COM IR) -->
+                    <div v-if="modalImpostos.abaAtiva === 'acoes'">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-bold text-slate-700">Vendas de Spot com Lucro Tributável</h3>
+                            <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-lg text-sm font-black">Total: {{ formatarMoeda(data.totalImpostosDevidos) }}</span>
+                        </div>
+                        
+                        <div v-if="data.impostosAcoesFiis && data.impostosAcoesFiis.length === 0" class="text-center py-10 bg-white rounded-2xl border border-slate-200 text-slate-400 text-sm">
+                            Nenhuma DARF pendente para o mercado à vista.
+                        </div>
+                        <div v-else class="space-y-3">
+                            <div v-for="imp in data.impostosAcoesFiis" :key="imp.id" class="border border-amber-200 rounded-xl p-4 bg-white shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">{{ imp.asset_name }}</p>
+                                    <p class="text-[10px] text-slate-500">Venda executada em: {{ imp.date.split('-').reverse().join('/') }}</p>
+                                    <p class="text-[10px] font-bold text-emerald-600 mt-1">Lucro auferido: {{ formatarMoeda(imp.lucro) }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold uppercase text-slate-400">IR a Recolher (Provisão)</p>
+                                    <p class="text-lg font-black text-amber-600">{{ formatarMoeda(imp.ir_devido) }}</p>
+                                    <div class="mt-1 flex items-center justify-end gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded">
+                                        <span class="icon-wrapper" v-html="getIcon('calendar', 12)"></span> Pagar até: {{ calcularVencimentoDarf(imp.date) }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- ABA B: DERIVATIVOS (OPÇÕES) -->
+                    <div v-if="modalImpostos.abaAtiva === 'opcoes'">
+                        <div class="bg-orange-50 border border-orange-200 p-4 rounded-xl mb-4 text-xs text-orange-800">
+                            <strong>Atenção à Regra Fiscal:</strong> O imposto de 15% sobre o prêmio das opções não é gerado no dia do lançamento. Ele só deve ser recolhido via DARF quando a opção for encerrada (Virar Pó / Expirar). Contratos em andamento não aparecem nesta lista.
+                        </div>
+
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-bold text-slate-700">Prêmios Retidos de Opções Expiradas</h3>
+                            <span class="bg-orange-100 text-orange-800 px-3 py-1 rounded-lg text-sm font-black">Total: {{ formatarMoeda(data.derivativosStats.ir_opcoes) }}</span>
+                        </div>
+
+                        <div v-if="data.impostosOpcoesDetalhados && data.impostosOpcoesDetalhados.length === 0" class="text-center py-10 bg-white rounded-2xl border border-slate-200 text-slate-400 text-sm">
+                            Nenhuma opção expirada (Virou Pó) registrada.
+                        </div>
+                        <div v-else class="space-y-3">
+                            <div v-for="opc in data.impostosOpcoesDetalhados" :key="opc.id" class="border border-orange-200 rounded-xl p-4 bg-white shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">{{ opc.asset_name }}</p>
+                                    <p class="text-[10px] text-slate-500">Expiração: {{ opc.date.split('-').reverse().join('/') }}</p>
+                                    <p class="text-[10px] font-bold text-emerald-600 mt-1">Prêmio Total: {{ formatarMoeda(opc.lucro) }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold uppercase text-slate-400">IR a Recolher (15%)</p>
+                                    <p class="text-lg font-black text-orange-600">{{ formatarMoeda(opc.ir_devido) }}</p>
+                                    <div class="mt-1 flex items-center justify-end gap-1 text-[10px] font-bold text-orange-800 bg-orange-50 px-2 py-1 rounded">
+                                        <span class="icon-wrapper" v-html="getIcon('calendar', 12)"></span> Pagar até: {{ calcularVencimentoDarf(opc.date) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ABA C: ESCUDO FISCAL (PREJUÍZOS) -->
+                    <div v-if="modalImpostos.abaAtiva === 'escudo'">
+                        <div class="bg-cyan-50 border border-cyan-200 p-4 rounded-xl mb-4 text-xs text-cyan-800">
+                            <strong>Dica de Compensação:</strong> Os valores abaixo representam prejuízos anotados em vendas do mercado à vista. Você pode abater esses valores do lucro de vendas futuras da mesma classe (Ações com Ações, FIIs com FIIs) para isentar seu IR.
+                        </div>
+
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-bold text-slate-700">Relatório de Prejuízos Aferidos</h3>
+                            <span class="bg-cyan-100 text-cyan-800 px-3 py-1 rounded-lg text-sm font-black">Prejuízo Global: {{ formatarMoeda(Math.abs(data.prejuizoAcumulado)) }}</span>
+                        </div>
+
+                        <div v-if="data.escudoFiscalDetalhados && data.escudoFiscalDetalhados.length === 0" class="text-center py-10 bg-white rounded-2xl border border-slate-200 text-slate-400 text-sm">
+                            Nenhum prejuízo registrado. Seu escudo fiscal está vazio.
+                        </div>
+                        <div v-else class="space-y-3">
+                            <div v-for="esc in data.escudoFiscalDetalhados" :key="esc.id" class="border border-cyan-200 rounded-xl p-4 bg-white shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">{{ esc.asset_name }}</p>
+                                    <p class="text-[10px] text-slate-500">Venda executada em: {{ esc.date.split('-').reverse().join('/') }}</p>
+                                    <p class="text-[10px] font-bold text-slate-400 mt-1">Valor da Ordem: {{ formatarMoeda(esc.valor_venda) }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold uppercase text-slate-400">Prejuízo Anotado</p>
+                                    <p class="text-lg font-black text-cyan-600">-{{ formatarMoeda(Math.abs(esc.lucro)) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -216,58 +300,87 @@
     </div>
 
     <script>
-        const { createApp, ref, computed, onMounted, nextTick } = Vue;
+        const { createApp, ref, computed, onMounted } = Vue;
 
-        // Variaveis globais dos gráficos de pizza
-        let chartMacroObj = null;
-        let chartMicroObj = null;
-        let chartDividasObj = null;
+        let charts = { classes: null, ativos: null, dividas: null };
 
         createApp({
             setup() {
                 const data = ref({
-                    totalAtivos: 0, totalDividas: 0, totalRendimentos: 0, totalImpostosDevidos: 0,
-                    impostosDetalhados: [], rebalanceModule: [], goalsModule: [],
-                    distribuicaoAtivos: [], distribuicaoDividas: { labels: [], valores: [] }
+                    totalAtivos: 0, totalDividas: 0, totalRendimentos: 0,
+                    totalImpostosDevidos: 0, prejuizoAcumulado: 0, 
+                    impostosAcoesFiis: [], escudoFiscalDetalhados: [], // Novas listas
+                    derivativosStats: { qtd_contratos: 0, premios_ativos: 0, margem_travada: 0, ir_opcoes: 0 },
+                    impostosOpcoesDetalhados: [],
+                    graficos: { classes: {labels:[], valores:[]}, ativos: {labels:[], valores:[]}, dividas: {labels:[], valores:[]} },
+                    rebalanceModule: [], goalsModule: []
                 });
 
-                const modalImpostos = ref({ aberto: false });
+                const modalImpostos = ref({ aberto: false, abaAtiva: 'acoes' });
 
-                const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-                const getIcon = (n, s=24) => { try { return lucide.icons[n].toSvg({width:s, height:s}); } catch(e) { return ""; } };
-
-                const abrirModalImpostos = () => { modalImpostos.value.aberto = true; };
+                const abrirModalImpostos = (abaTarget) => { 
+                    modalImpostos.value.abaAtiva = abaTarget;
+                    modalImpostos.value.aberto = true; 
+                };
                 const fecharModalImpostos = () => { modalImpostos.value.aberto = false; };
 
+                const getIcon = (name, size=24) => { 
+                    try { 
+                        const n = name.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
+                        return lucide.icons[n].toSvg({width:size,height:size}); 
+                    } catch(e) { return ""; } 
+                };
+
+                const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+                // FUNÇÃO QUE CALCULA O VENCIMENTO DA DARF (Último dia do mês subsequente)
+                const calcularVencimentoDarf = (dataOperacao) => {
+                    if (!dataOperacao) return '';
+                    // Adiciona tempo meio-dia para evitar bugs de Timezone (dia anterior)
+                    const dataBase = new Date(dataOperacao + 'T12:00:00');
+                    // O mês base é dataBase.getMonth(). O mês subsequente seria +1.
+                    // Para pegar o ÚLTIMO dia do mês subsequente, jogamos para o mês +2 e pedimos o dia "0".
+                    const dataVencimento = new Date(dataBase.getFullYear(), dataBase.getMonth() + 2, 0);
+                    return dataVencimento.toLocaleDateString('pt-BR');
+                };
+
                 const rebalanceCalculado = computed(() => {
-                    if (!data.value.totalAtivos || data.value.totalAtivos === 0) return [];
-                    
-                    return data.value.rebalanceModule.map(cat => {
-                        const pctAtual = (cat.current_amount / data.value.totalAtivos) * 100;
-                        const pctAlvo = cat.target_pct;
-                        const diferencaPct = pctAtual - pctAlvo;
-                        const diferencaFinanceira = (diferencaPct / 100) * data.value.totalAtivos;
-                        
-                        let recomendacao = "Balanceado";
-                        let statusColor = "text-slate-500";
-                        let barColor = "#94a3b8";
-
-                        if (diferencaPct > 2) {
-                            recomendacao = "Sobre-alocado. Segure aportes.";
-                            statusColor = "text-rose-500";
-                            barColor = "#f43f5e";
-                        } else if (diferencaPct < -2) {
-                            recomendacao = "Sub-alocado. Aporte sugerido:";
-                            statusColor = "text-blue-500";
-                            barColor = "#3b82f6";
-                        } else {
-                            statusColor = "text-emerald-500";
-                            barColor = "#10b981";
-                        }
-
-                        return { ...cat, pctAtual, diferencaPct, diferencaFinanceira, recomendacao, statusColor, barColor };
+                    if (!data.value.rebalanceModule || data.value.rebalanceModule.length === 0) return [];
+                    const classesMap = {};
+                    let patrimonioTotalRebalanceamento = 0;
+                    data.value.rebalanceModule.forEach(ativo => {
+                        patrimonioTotalRebalanceamento += ativo.current_balance;
+                        if (!classesMap[ativo.class_id]) classesMap[ativo.class_id] = { name: ativo.class_name, color: '#3b82f6', target: ativo.target_percentage, current_balance: 0 };
+                        classesMap[ativo.class_id].current_balance += ativo.current_balance;
+                        classesMap[ativo.class_id].color = ativo.color || classesMap[ativo.class_id].color;
                     });
+                    if (patrimonioTotalRebalanceamento === 0) return [];
+                    return Object.values(classesMap).map(c => {
+                        const percentualAtual = (c.current_balance / patrimonioTotalRebalanceamento) * 100;
+                        const valorAlvo = patrimonioTotalRebalanceamento * (c.target / 100);
+                        return { ...c, percentualAtual, diferencaFinanceira: c.current_balance - valorAlvo };
+                    }).sort((a, b) => a.diferencaFinanceira - b.diferencaFinanceira);
                 });
+
+                const renderGraficos = () => {
+                    const defaultOptionsPie = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: {size: 10} } } }, cutout: '65%' };
+                    
+                    // Adicionado Optional Chaining (?.) para não quebrar a tela se a API atrasar
+                    if(document.getElementById('classesPieChart') && data.value.graficos?.classes?.labels?.length > 0) {
+                        if(charts.classes) charts.classes.destroy();
+                        charts.classes = new Chart(document.getElementById('classesPieChart'), { type: 'doughnut', data: { labels: data.value.graficos.classes.labels, datasets: [{ data: data.value.graficos.classes.valores, backgroundColor: data.value.graficos.classes.cores || ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'], borderWidth: 0 }] }, options: defaultOptionsPie });
+                    }
+                    
+                    if(document.getElementById('ativosPieChart') && data.value.graficos?.ativos?.labels?.length > 0) {
+                        if(charts.ativos) charts.ativos.destroy();
+                        charts.ativos = new Chart(document.getElementById('ativosPieChart'), { type: 'doughnut', data: { labels: data.value.graficos.ativos.labels, datasets: [{ data: data.value.graficos.ativos.valores, backgroundColor: data.value.graficos.ativos.cores || ['#cbd5e1'], borderWidth: 0 }] }, options: defaultOptionsPie });
+                    }
+
+                    if(document.getElementById('dividasPieChart') && data.value.graficos?.dividas?.labels?.length > 0) {
+                        if(charts.dividas) charts.dividas.destroy();
+                        charts.dividas = new Chart(document.getElementById('dividasPieChart'), { type: 'doughnut', data: { labels: data.value.graficos.dividas.labels, datasets: [{ data: data.value.graficos.dividas.valores, backgroundColor: ['#f43f5e', '#fb923c', '#f59e0b'], borderWidth: 0 }] }, options: defaultOptionsPie });
+                    }
+                };
 
                 const carregarDados = async () => {
                     try {
@@ -278,98 +391,21 @@
                         data.value.totalDividas = result.totalDividas || 0;
                         data.value.totalRendimentos = result.totalRendimentos || 0;
                         data.value.totalImpostosDevidos = result.totalImpostosDevidos || 0;
-                        data.value.impostosDetalhados = result.impostosDetalhados || [];
+                        data.value.prejuizoAcumulado = result.prejuizoAcumulado || 0;
+                        
+                        // Capturando as listas já separadas pelo Backend
+                        data.value.impostosAcoesFiis = result.impostosAcoesFiis || [];
+                        data.value.escudoFiscalDetalhados = result.escudoFiscalDetalhados || [];
+                        data.value.impostosOpcoesDetalhados = result.impostosOpcoesDetalhados || [];
+                        
                         data.value.rebalanceModule = result.rebalanceModule || [];
                         data.value.goalsModule = result.goalsModule || [];
-                        data.value.distribuicaoAtivos = result.fundos || [];
-                        data.value.distribuicaoDividas = { labels: result.dividasLabels || [], valores: result.dividasValores || [] };
-                        
-                        nextTick(() => {
-                            initPizzas();
-                        });
+
+                        if (result.derivativosStats) data.value.derivativosStats = result.derivativosStats;
+                        if (result.graficos) data.value.graficos = result.graficos;
+
+                        setTimeout(renderGraficos, 100);
                     } catch (e) { console.error("Erro ao carregar dashboard:", e); }
-                };
-
-                const initPizzas = () => {
-                    const optionsComuns = {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        cutout: '65%',
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(c) { return ` ${formatarMoeda(c.raw)}`; }
-                                }
-                            }
-                        }
-                    };
-
-                    // 1. PIZZA MACRO (Por Classe/Tipo de Ativo)
-                    const ctxMacro = document.getElementById('macroPieChart');
-                    if (ctxMacro && data.value.distribuicaoAtivos.length > 0) {
-                        const macroMap = {};
-                        const defaultColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f43f5e'];
-                        let colorIdx = 0;
-
-                        data.value.distribuicaoAtivos.forEach(d => {
-                            if (!macroMap[d.tipo]) {
-                                macroMap[d.tipo] = { saldo: 0, cor: defaultColors[colorIdx % defaultColors.length] };
-                                colorIdx++;
-                            }
-                            macroMap[d.tipo].saldo += d.saldo;
-                        });
-
-                        if (chartMacroObj) chartMacroObj.destroy();
-                        chartMacroObj = new Chart(ctxMacro, {
-                            type: 'doughnut',
-                            data: {
-                                labels: Object.keys(macroMap),
-                                datasets: [{
-                                    data: Object.values(macroMap).map(v => v.saldo),
-                                    backgroundColor: Object.values(macroMap).map(v => v.cor),
-                                    borderWidth: 2, hoverOffset: 4
-                                }]
-                            },
-                            options: optionsComuns
-                        });
-                    }
-
-                    // 2. PIZZA MICRO (Concentração por Ativo Individual)
-                    const ctxMicro = document.getElementById('microPieChart');
-                    if (ctxMicro && data.value.distribuicaoAtivos.length > 0) {
-                        if (chartMicroObj) chartMicroObj.destroy();
-                        chartMicroObj = new Chart(ctxMicro, {
-                            type: 'doughnut',
-                            data: {
-                                labels: data.value.distribuicaoAtivos.map(d => d.nome),
-                                datasets: [{
-                                    data: data.value.distribuicaoAtivos.map(d => d.saldo),
-                                    backgroundColor: data.value.distribuicaoAtivos.map(d => d.cor),
-                                    borderWidth: 2, hoverOffset: 4
-                                }]
-                            },
-                            options: optionsComuns
-                        });
-                    }
-
-                    // 3. PIZZA DE PASSIVOS
-                    const ctxDividas = document.getElementById('dividasPieChart');
-                    if (ctxDividas && data.value.distribuicaoDividas.labels.length > 0) {
-                        if (chartDividasObj) chartDividasObj.destroy();
-                        chartDividasObj = new Chart(ctxDividas, {
-                            type: 'doughnut',
-                            data: {
-                                labels: data.value.distribuicaoDividas.labels,
-                                datasets: [{
-                                    data: data.value.distribuicaoDividas.valores,
-                                    backgroundColor: ['#f43f5e', '#fb923c', '#f59e0b', '#8b5cf6', '#06b6d4'],
-                                    borderWidth: 2, hoverOffset: 4
-                                }]
-                            },
-                            options: optionsComuns
-                        });
-                    }
                 };
 
                 onMounted(() => {
@@ -377,12 +413,7 @@
                     carregarDados();
                 });
 
-                return { 
-                    data, 
-                    modalImpostos, abrirModalImpostos, fecharModalImpostos,
-                    formatarMoeda, getIcon, carregarDados,
-                    rebalanceCalculado
-                };
+                return { data, modalImpostos, abrirModalImpostos, fecharModalImpostos, formatarMoeda, getIcon, rebalanceCalculado, calcularVencimentoDarf };
             }
         }).mount('#app');
     </script>

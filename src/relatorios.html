@@ -39,7 +39,6 @@
                     </p>
                 </div>
                 
-                <!-- NOVO BOTÃO ASSISTENTE DE IRPF -->
                 <button @click="abrirAssistenteIrpf" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
                     <span class="icon-wrapper" v-html="getIcon('file-text')"></span>
                     Assistente de IRPF
@@ -145,7 +144,7 @@
                 <!-- Menu de Abas -->
                 <div class="flex border-b border-slate-200 bg-slate-50 shrink-0">
                     <button @click="modalIrpf.abaAtiva = 'bens'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalIrpf.abaAtiva === 'bens' ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
-                        <span class="icon-wrapper" v-html="getIcon('briefcase', 18)"></span> Posição 31/12 (Bens e Direitos)
+                        <span class="icon-wrapper" v-html="getIcon('briefcase', 18)"></span> Posição 31/12 (Bens, Direitos e Ônus)
                     </button>
                     <button @click="modalIrpf.abaAtiva = 'proventos'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalIrpf.abaAtiva === 'proventos' ? 'border-emerald-600 text-emerald-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
                         <span class="icon-wrapper" v-html="getIcon('dollar-sign', 18)"></span> Proventos (Audit)
@@ -163,26 +162,30 @@
                         <p class="font-bold text-slate-600">Calculando Posições Históricas...</p>
                     </div>
 
-                    <!-- ABA 1: BENS E DIREITOS -->
+                    <!-- ABA 1: BENS E DIREITOS (Agora com Dívidas Reais/Opções) -->
                     <div v-if="modalIrpf.abaAtiva === 'bens' && !modalIrpf.loading">
                         <div class="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 text-sm text-blue-800">
-                            <p><strong>Bens e Direitos:</strong> Os dados abaixo refletem a sua quantidade de cotas e Preço Médio (Custo de Aquisição) exatos no dia <strong>31/12/{{ modalIrpf.anoSelecionado }}</strong>.</p>
+                            <p><strong>Bens e Direitos / Dívidas Reais:</strong> Posição exata no dia <strong>31/12/{{ modalIrpf.anoSelecionado }}</strong>. Opções lançadas (não encerradas até 31/12) devem ser declaradas em "Dívidas e Ônus Reais" com o Código 47.</p>
                         </div>
                         
                         <div v-if="modalIrpf.dados.bens.length === 0" class="text-center py-10 text-slate-400">
-                            Você não possuía nenhum ativo em carteira no final de {{ modalIrpf.anoSelecionado }}.
+                            Nenhuma posição aberta no final de {{ modalIrpf.anoSelecionado }}.
                         </div>
 
                         <div class="space-y-4">
-                            <div v-for="bem in modalIrpf.dados.bens" :key="bem.id" class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                            <div v-for="bem in modalIrpf.dados.bens" :key="bem.id" class="bg-white border rounded-2xl p-5 shadow-sm" :class="bem.natureza === 'opcao' ? 'border-rose-300' : 'border-slate-200'">
                                 <div class="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
                                     <div>
-                                        <h4 class="text-lg font-black text-slate-800">{{ bem.name }}</h4>
-                                        <p class="text-xs font-bold text-slate-500">{{ bem.type }} • Custo Total a Declarar: <span class="text-blue-600">{{ formatarMoeda(bem.totalInvestido) }}</span></p>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span v-if="bem.natureza === 'opcao'" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-black rounded uppercase">Dívida / Ônus</span>
+                                            <span v-else class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">Bens e Direitos</span>
+                                            <h4 class="text-lg font-black text-slate-800">{{ bem.name }}</h4>
+                                        </div>
+                                        <p class="text-xs font-bold text-slate-500">{{ bem.type }} • Custo a Declarar: <span class="font-black" :class="bem.natureza === 'opcao' ? 'text-rose-600' : 'text-blue-600'">{{ formatarMoeda(bem.totalInvestido) }}</span></p>
                                     </div>
                                     <div class="text-right">
                                         <p class="text-[10px] font-bold text-slate-400 uppercase">Posição</p>
-                                        <p class="text-sm font-bold text-slate-700">{{ bem.quantidade }} cotas</p>
+                                        <p class="text-sm font-bold text-slate-700">{{ bem.quantidade }} {{ bem.natureza === 'opcao' ? 'contratos' : 'cotas' }}</p>
                                     </div>
                                 </div>
                                 <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex gap-3 items-center group">
@@ -199,11 +202,11 @@
 
                     <!-- ABA 2: PROVENTOS (AUDIT) -->
                     <div v-if="modalIrpf.abaAtiva === 'proventos' && !modalIrpf.loading">
-                        <div class="bg-rose-50 border border-rose-200 p-4 rounded-xl mb-6 text-sm text-rose-800 flex gap-3 items-start">
+                        <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl mb-6 text-sm text-emerald-800 flex gap-3 items-start">
                             <span class="icon-wrapper mt-0.5 shrink-0" v-html="getIcon('alert-triangle')"></span>
                             <div>
                                 <p class="font-bold mb-1">Atenção: Ferramenta de Dupla Checagem (Auditoria)</p>
-                                <p>A Receita Federal cruza os dados com o <strong>Informe de Rendimentos</strong> enviado pela corretora. Em caso de divergência de centavos ou classificação de ativos, o PDF da corretora prevalece. Use os dados abaixo apenas para confirmar se não esqueceu de lançar nada e se os totais batem.</p>
+                                <p>A Receita Federal cruza os dados com o <strong>Informe de Rendimentos</strong> enviado pela corretora. Em caso de divergência, o PDF da corretora prevalece.</p>
                             </div>
                         </div>
 
@@ -226,33 +229,59 @@
                         </div>
                     </div>
 
-                    <!-- ABA 3: VENDAS (GANHOS DE CAPITAL) -->
+                    <!-- ABA 3: VENDAS (GANHOS DE CAPITAL E CESTAS) -->
                     <div v-if="modalIrpf.abaAtiva === 'vendas' && !modalIrpf.loading">
                         <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6 text-sm text-amber-800">
-                            <p><strong>Ganhos de Capital (Renda Variável):</strong> Resumo de todas as vendas e alienações executadas em {{ modalIrpf.anoSelecionado }}, agrupadas por mês de competência.</p>
+                            <p><strong>Cálculo Tributário (Renda Variável):</strong> Vendas de ações comuns possuem isenção para volumes abaixo de <strong>R$ 20.000 mensais</strong>. Lucros com Fundos, BDRs e <strong>Opções de Derivativos</strong> não possuem isenção, sendo sempre tributáveis.</p>
                         </div>
 
-                        <div class="space-y-3">
-                            <div v-for="mes in modalIrpf.dados.vendas" :key="mes.mesNumero" class="bg-white border rounded-xl overflow-hidden shadow-sm" :class="mes.total_vendido > 0 ? 'border-slate-300' : 'border-slate-100 opacity-60'">
-                                <div class="p-4 flex justify-between items-center" :class="mes.total_vendido > 0 ? 'bg-white' : 'bg-slate-50'">
-                                    <div class="w-1/4">
-                                        <h4 class="text-sm font-black text-slate-800 uppercase tracking-widest">{{ mes.mesNome }}</h4>
-                                    </div>
-                                    <div class="w-1/4 text-center">
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Total Vendido Bruto</p>
-                                        <p class="text-sm font-bold text-slate-700">{{ formatarMoeda(mes.total_vendido) }}</p>
-                                        <p v-if="mes.total_vendido > 0 && mes.total_vendido < 20000" class="text-[9px] text-emerald-600 font-bold mt-0.5">Sub R$ 20k</p>
-                                        <p v-if="mes.total_vendido >= 20000" class="text-[9px] text-rose-600 font-bold mt-0.5">Over R$ 20k (Tributável)</p>
-                                    </div>
-                                    <div class="w-1/4 text-center">
-                                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Resultado (Lucro/Prejuízo)</p>
-                                        <p class="text-sm font-bold" :class="mes.total_lucro > 0 ? 'text-emerald-600' : (mes.total_lucro < 0 ? 'text-rose-600' : 'text-slate-400')">
-                                            {{ mes.total_lucro > 0 ? '+' : '' }}{{ formatarMoeda(mes.total_lucro) }}
+                        <div class="space-y-4">
+                            <div v-for="mes in modalIrpf.dados.vendas" :key="mes.mesNumero" v-show="mes.acoes_total_vendido > 0 || mes.tributavel_total_lucro !== 0" class="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                                
+                                <div class="bg-slate-800 text-white p-3 px-4 flex justify-between items-center">
+                                    <h4 class="text-sm font-black uppercase tracking-widest">{{ mes.mesNome }}</h4>
+                                </div>
+
+                                <div class="p-0 flex flex-col md:flex-row">
+                                    <!-- Cesta 1: Ações (Com Validação de Isenção) -->
+                                    <div class="flex-1 p-4 border-b md:border-b-0 md:border-r border-slate-200">
+                                        <p class="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center justify-between">
+                                            Cesta de Ações (Isenção 20k)
+                                            <span v-if="mes.acoes_total_vendido > 0 && mes.acoes_total_vendido < 20000" class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] rounded">Isento (Sub 20k)</span>
+                                            <span v-if="mes.acoes_total_vendido >= 20000" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] rounded">Tributável</span>
                                         </p>
+                                        <div class="grid grid-cols-2 gap-2 text-sm">
+                                            <div class="bg-slate-50 p-2 rounded border border-slate-100">
+                                                <p class="text-[10px] text-slate-400">Total Vendido</p>
+                                                <p class="font-bold text-slate-800">{{ formatarMoeda(mes.acoes_total_vendido) }}</p>
+                                            </div>
+                                            <div class="bg-slate-50 p-2 rounded border border-slate-100">
+                                                <p class="text-[10px] text-slate-400">Resultado Líquido</p>
+                                                <p class="font-bold" :class="mes.acoes_total_lucro > 0 ? 'text-emerald-600' : (mes.acoes_total_lucro < 0 ? 'text-rose-600' : 'text-slate-800')">
+                                                    {{ mes.acoes_total_lucro > 0 ? '+' : '' }}{{ formatarMoeda(mes.acoes_total_lucro) }}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="w-1/4 text-right">
-                                        <p class="text-[10px] font-bold text-amber-600 uppercase mb-0.5">Provisão I.R. / Dedo-Duro</p>
-                                        <p class="text-sm font-black text-amber-600">{{ formatarMoeda(mes.total_imposto) }}</p>
+
+                                    <!-- Cesta 2: Direto Tributável (FIIs, BDRs e Derivativos) -->
+                                    <div class="flex-1 p-4">
+                                        <p class="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center justify-between">
+                                            FIIs, BDRs e Opções (Sem Isenção)
+                                            <span v-if="mes.tributavel_total_lucro > 0" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] rounded">Tributável</span>
+                                        </p>
+                                        <div class="grid grid-cols-2 gap-2 text-sm">
+                                            <div class="bg-slate-50 p-2 rounded border border-slate-100">
+                                                <p class="text-[10px] text-slate-400">Resultado Líquido</p>
+                                                <p class="font-bold" :class="mes.tributavel_total_lucro > 0 ? 'text-emerald-600' : (mes.tributavel_total_lucro < 0 ? 'text-rose-600' : 'text-slate-800')">
+                                                    {{ mes.tributavel_total_lucro > 0 ? '+' : '' }}{{ formatarMoeda(mes.tributavel_total_lucro) }}
+                                                </p>
+                                            </div>
+                                            <div class="bg-orange-50 p-2 rounded border border-orange-100">
+                                                <p class="text-[10px] text-orange-600 font-bold">Imposto Devido (Mês)</p>
+                                                <p class="font-black text-orange-700">{{ formatarMoeda((mes.acoes_total_vendido >= 20000 ? mes.acoes_total_imposto : 0) + mes.tributavel_total_imposto) }}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -274,30 +303,21 @@
         createApp({
             setup() {
                 const loading = ref(true);
-                const data = ref({
-                    evolutionInvestments: [],
-                    snapshots: [],
-                    activeLoans: []
-                });
+                const data = ref({ evolutionInvestments: [], snapshots: [], activeLoans: [] });
 
-                // ESTADOS DOS GRÁFICOS
                 const filtroAtivoEvolucao = ref('global');
                 const tipoVisaoEvolucao = ref('aportes');
                 const filtroTempo = ref('max'); 
                 const filtroDivida = ref('global');
 
-                // ESTADOS DO ASSISTENTE DE IRPF
                 const modalIrpf = ref({
-                    aberto: false,
-                    loading: false,
-                    abaAtiva: 'bens', // 'bens', 'proventos', 'vendas'
+                    aberto: false, loading: false, abaAtiva: 'bens',
                     anoSelecionado: new Date().getFullYear() - 1,
                     dados: { bens: [], proventos: [], vendas: [] }
                 });
 
                 const anosDisponiveis = computed(() => {
-                    const anos = [];
-                    const anoAtual = new Date().getFullYear();
+                    const anos = []; const anoAtual = new Date().getFullYear();
                     for(let i = anoAtual; i >= 2020; i--) anos.push(i);
                     return anos;
                 });
@@ -327,13 +347,9 @@
                             renderEvolucaoDividas();
                             loading.value = false;
                         });
-                    } catch (e) { 
-                        console.error("Erro ao carregar relatórios:", e); 
-                        loading.value = false;
-                    }
+                    } catch (e) { console.error("Erro ao carregar relatórios:", e); loading.value = false; }
                 };
 
-                // FUNÇÕES DO ASSISTENTE DE IRPF
                 const abrirAssistenteIrpf = () => {
                     modalIrpf.value.aberto = true;
                     carregarDadosIrpf();
@@ -346,7 +362,6 @@
                         const result = await res.json();
                         modalIrpf.value.dados = result;
                     } catch (e) {
-                        console.error("Erro ao carregar dados do IRPF", e);
                         alert("Erro ao calcular dados de IRPF.");
                     } finally {
                         modalIrpf.value.loading = false;
@@ -354,25 +369,28 @@
                 };
 
                 const gerarTextoDeclaracao = (bem) => {
-                    const qty = bem.quantidade.toFixed(4).replace(/\.?0+$/, ''); 
-                    const razao = bem.razao_social || 'Razão Social pendente';
-                    const cnpj = bem.cnpj || 'CNPJ pendente';
-                    const corretora = bem.corretora || 'Corretora/Custódia pendente';
-                    const pm = formatarMoeda(bem.precoMedio);
-                    
-                    return `${qty} cotas de ${bem.name} (${razao}), CNPJ: ${cnpj}, custodiadas na instituição ${corretora}. Preço Médio de Aquisição: ${pm}.`;
+                    if (bem.natureza === 'opcao') {
+                        const premioStr = formatarMoeda(bem.totalInvestido);
+                        return `Opção de ${bem.type} ${bem.name}, titularidade de ${bem.quantidade} contratos. Prêmio recebido/travado de ${premioStr}.`;
+                    } else {
+                        const qty = bem.quantidade.toFixed(4).replace(/\.?0+$/, ''); 
+                        const razao = bem.razao_social || 'Razão Social pendente';
+                        const cnpj = bem.cnpj || 'CNPJ pendente';
+                        const corretora = bem.corretora || 'Corretora/Custódia pendente';
+                        const pm = formatarMoeda(bem.precoMedio);
+                        return `${qty} cotas de ${bem.name} (${razao}), CNPJ: ${cnpj}, custodiadas na instituição ${corretora}. Preço Médio de Aquisição: ${pm}.`;
+                    }
                 };
 
                 const copiarTexto = (texto) => {
                     const textArea = document.createElement("textarea");
-                    textArea.value = texto;
-                    document.body.appendChild(textArea);
+                    textArea.value = texto; document.body.appendChild(textArea);
                     textArea.select();
-                    try { document.execCommand('copy'); } catch (err) { console.error('Falha ao copiar', err); }
+                    try { document.execCommand('copy'); } catch (err) { }
                     document.body.removeChild(textArea);
                 };
 
-                // LÓGICA DE GRÁFICOS (Evolução de Ativos Inteligente)
+                // LÓGICA DE GRÁFICOS (MANTIDA INTACTA)
                 const renderEvolucaoInvestimentos = () => {
                     const ctxEv = document.getElementById('evolucaoInvestChart');
                     if (!ctxEv) return;
@@ -385,7 +403,6 @@
 
                     const groupedData = {};
 
-                    // 1. Agrupar Fluxo de Caixa Mensal
                     rawData.forEach(row => {
                         if (!row.date) return;
                         const [year, month] = row.date.split('-');
@@ -399,7 +416,6 @@
                         if (row.type === 'dividend') groupedData[key].proventoMes += row.amount;
                     });
 
-                    // 2. Garantir que meses de Snapshots (sincronizações) existam na linha do tempo
                     data.value.snapshots.forEach(snap => {
                         if (!snap.date) return;
                         const [year, month] = snap.date.split('-');
@@ -411,7 +427,6 @@
 
                     let timeline = Object.values(groupedData).sort((a, b) => a.dataSort - b.dataSort);
 
-                    // 3. Organizar os Snapshots Mês a Mês para Cálculo
                     const snapshotsPorMes = {};
                     data.value.snapshots.forEach(snap => {
                         const [year, month] = snap.date.split('-');
@@ -422,9 +437,8 @@
 
                     let acumuladoAportes = 0;
                     let acumuladoReceitas = 0;
-                    let ultimoPrecoConhecidoPorAtivo = {}; // Nossa memória principal
+                    let ultimoPrecoConhecidoPorAtivo = {}; 
 
-                    // 4. Calcular Acumulados + Injetar Marcação
                     timeline.forEach(t => {
                         acumuladoAportes += (t.aporteMes - t.resgateMes);
                         acumuladoReceitas += t.proventoMes;
@@ -433,10 +447,8 @@
 
                         const mesKey = `${t.dataSort.getFullYear()}-${String(t.dataSort.getMonth() + 1).padStart(2, '0')}`;
                         
-                        // Atualiza os preços conhecidos com a fotografia deste mês
                         if (snapshotsPorMes[mesKey]) {
                             snapshotsPorMes[mesKey].forEach(snap => {
-                                // Funciona com a API nova (por ativo) ou fallback se o usuário demorar a atualizar o backend
                                 if(snap.asset_id !== undefined) {
                                     ultimoPrecoConhecidoPorAtivo[snap.asset_id] = snap.total_value !== undefined ? snap.total_value : snap.patrimonio_total;
                                 } else {
@@ -445,7 +457,6 @@
                             });
                         }
 
-                        // Calcular a Marcação a Mercado dependendo do Filtro
                         if (filtroAtivoEvolucao.value === 'global') {
                             if (ultimoPrecoConhecidoPorAtivo['global_legacy'] !== undefined && Object.keys(ultimoPrecoConhecidoPorAtivo).length === 1) {
                                 t.patrimonioSnapshot = ultimoPrecoConhecidoPorAtivo['global_legacy'];
@@ -485,7 +496,6 @@
                         }
                     ];
 
-                    // Marcação a Mercado agora é injetada livremente (Global ou Por Ativo)
                     if (isAportes) {
                         const labelMarcacao = filtroAtivoEvolucao.value === 'global' ? 'Patrimônio Total (Marcação)' : 'Valor Atual (Marcação)';
                         datasets.unshift({

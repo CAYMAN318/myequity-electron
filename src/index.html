@@ -1,21 +1,18 @@
-<!DOCTYPE html>
+
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyEquity - Gestão Patrimonial</title>
     
-    <!-- Bibliotecas Locais -->
     <script src="libs/tailwindcss.js"></script>
     <script src="libs/vue.global.js"></script>
     <script src="libs/lucide.js"></script>
 
     <style>
-        /* Mudança 1: Cor de fundo suavizada (um verde bem claro/oliva suave) */
         body { font-family: 'Inter', sans-serif; background-color: #f4f7f4; overflow: hidden; }
         
-        /* Ajuste na fonte e transições dos itens da barra lateral */
-        .sidebar-item { transition: all 0.2s ease; border-radius: 12px; margin-bottom: 4px; font-weight: 600; /* Suavizando o negrito */ letter-spacing: -0.01em;}
+        .sidebar-item { transition: all 0.2s ease; border-radius: 12px; margin-bottom: 4px; font-weight: 600; letter-spacing: -0.01em;}
         .sidebar-item.active { background-color: #0f172a; color: #ffffff; }
         .sidebar-item:not(.active):hover { background-color: #e2e8f0; color: #1e293b; }
         
@@ -23,61 +20,57 @@
         span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; }
     </style>
 </head>
-<body class="h-screen flex">
+<body class="flex h-screen w-screen text-slate-800 antialiased selection:bg-blue-200 selection:text-blue-900">
 
-    <div id="app" class="flex w-full h-full">
-        
-        <!-- Menu Lateral (Sidebar) -->
-        <aside class="w-72 bg-white border-r border-slate-200 flex flex-col p-6 shadow-sm z-10">
-            <!-- Logotipo do App -->
-            <div class="flex items-center gap-3 mb-10 px-2">
-                <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-md">
-                    <span class="icon-wrapper" v-html="getIcon('bar-chart', 24)"></span>
-                </div>
-                <div>
-                    <h1 class="text-xl font-black text-slate-800 tracking-tight leading-none">MyEquity</h1>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gestão Patrimonial</p>
-                </div>
+    <div id="app" class="flex h-full w-full">
+
+        <aside class="w-64 bg-slate-50 border-r border-slate-200 flex flex-col h-full shrink-0 shadow-sm z-10 relative">
+            <div class="p-6 pb-2">
+                <h1 class="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
+                    <div class="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
+                        <span class="icon-wrapper text-white" v-html="getIcon('bar-chart-2', 20)"></span>
+                    </div>
+                    MyEquity
+                </h1>
+                <p class="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-2 ml-1 mb-6">Wealth Management</p>
             </div>
 
-            <!-- Navegação -->
-            <nav class="space-y-1 flex-1">
-                <button @click="navegar('dashboard')" class="w-full flex items-center gap-3 px-4 py-3 text-sm sidebar-item" :class="currentPath === 'dashboard' ? 'active' : 'text-slate-600'">
-                    <span class="icon-wrapper" v-html="getIcon('layout-dashboard')"></span> Dashboard
+            <nav class="flex-1 px-4 overflow-y-auto mt-2">
+                <button @click="navegar('dashboard')" :class="['sidebar-item w-full flex items-center gap-3 px-4 py-3', currentPath === 'dashboard' ? 'active' : 'text-slate-500']">
+                    <span class="icon-wrapper" v-html="getIcon('layout-dashboard', 20)"></span>
+                    <span class="text-sm">Dashboard</span>
                 </button>
-                <button @click="navegar('investimentos')" class="w-full flex items-center gap-3 px-4 py-3 text-sm sidebar-item" :class="currentPath === 'investimentos' ? 'active' : 'text-slate-600'">
-                    <span class="icon-wrapper" v-html="getIcon('briefcase')"></span> Investimentos
+
+                <button @click="navegar('investimentos')" :class="['sidebar-item w-full flex items-center gap-3 px-4 py-3', currentPath === 'investimentos' ? 'active' : 'text-slate-500']">
+                    <span class="icon-wrapper" v-html="getIcon('briefcase', 20)"></span>
+                    <span class="text-sm">Investimentos (Spot)</span>
                 </button>
-                <button @click="navegar('dividas')" class="w-full flex items-center gap-3 px-4 py-3 text-sm sidebar-item" :class="currentPath === 'dividas' ? 'active' : 'text-slate-600'">
-                    <span class="icon-wrapper" v-html="getIcon('credit-card')"></span> Passivos
+
+                <button @click="navegar('derivativos')" :class="['sidebar-item w-full flex items-center gap-3 px-4 py-3', currentPath === 'derivativos' ? 'active' : 'text-slate-500']">
+                    <span class="icon-wrapper" v-html="getIcon('candlestick-chart', 20)"></span>
+                    <span class="text-sm">Mesa de Derivativos</span>
                 </button>
-                
-                <button @click="navegar('relatorios')" class="w-full flex items-center gap-3 px-4 py-3 text-sm sidebar-item" :class="currentPath === 'relatorios' ? 'active' : 'text-slate-600'">
-                    <span class="icon-wrapper" v-html="getIcon('bar-chart-2')"></span> Relatórios
+
+                <button @click="navegar('dividas')" :class="['sidebar-item w-full flex items-center gap-3 px-4 py-3', currentPath === 'dividas' ? 'active' : 'text-slate-500']">
+                    <span class="icon-wrapper" v-html="getIcon('credit-card', 20)"></span>
+                    <span class="text-sm">Passivos & Dívidas</span>
                 </button>
-                
-                <!-- Separador visual com mt-6 e uma borda sutil no topo para o botão Parâmetros -->
-                <div class="mt-6 pt-2 border-t border-slate-100">
-                    <button @click="navegar('parametros')" class="w-full flex items-center gap-3 px-4 py-3 text-sm sidebar-item" :class="currentPath === 'parametros' ? 'active' : 'text-slate-600'">
-                        <span class="icon-wrapper" v-html="getIcon('settings')"></span> Parâmetros
-                    </button>
-                </div>
+
+                <button @click="navegar('relatorios')" :class="['sidebar-item w-full flex items-center gap-3 px-4 py-3', currentPath === 'relatorios' ? 'active' : 'text-slate-500']">
+                    <span class="icon-wrapper" v-html="getIcon('pie-chart', 20)"></span>
+                    <span class="text-sm">Relatórios e IRPF</span>
+                </button>
             </nav>
 
-            <!-- Rodapé da Sidebar -->
-            <div class="mt-auto pt-6 border-t border-slate-100 px-2">
-                <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs">AE</div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-xs font-bold text-slate-700 truncate">Aurélio V2</p>
-                        <p class="text-[10px] font-medium text-slate-400">v2.4.0</p>
-                    </div>
-                </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50/80 backdrop-blur-sm">
+                <button @click="navegar('parametros')" :class="['sidebar-item w-full flex items-center gap-3 px-4 py-3', currentPath === 'parametros' ? 'active' : 'text-slate-500']">
+                    <span class="icon-wrapper" v-html="getIcon('settings', 20)"></span>
+                    <span class="text-sm">Parâmetros</span>
+                </button>
             </div>
         </aside>
 
-        <!-- Área de Conteúdo (Iframe) -->
-        <main class="flex-1 h-full overflow-hidden relative">
+        <main class="flex-1 h-full bg-white relative overflow-hidden">
             <iframe :src="iframeSrc" id="contentFrame"></iframe>
         </main>
 

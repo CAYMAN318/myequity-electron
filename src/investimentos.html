@@ -10,13 +10,42 @@
     <script src="libs/lucide.js"></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
-        .asset-card { transition: all 0.3s ease; border: 1px solid #e2e8f0; min-height: 480px; display: flex; flex-direction: column; justify-content: space-between; background: white; border-radius: 24px;}
-        .asset-card:hover { border-color: #3b82f6; transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.1); }
-        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.6); }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
+        }
+        span.icon-wrapper { 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            line-height: 0; 
+        }
+        .asset-card { 
+            transition: all 0.3s ease; 
+            border: 1px solid #e2e8f0; 
+            min-height: 480px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            background: white; 
+            border-radius: 24px;
+        }
+        .asset-card:hover { 
+            border-color: #3b82f6; 
+            transform: translateY(-4px); 
+            box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.1); 
+        }
+        .modal-blur { 
+            backdrop-filter: blur(8px); 
+            background-color: rgba(15, 23, 42, 0.6); 
+        }
+        .custom-scrollbar::-webkit-scrollbar { 
+            width: 6px; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb { 
+            background: #cbd5e1; 
+            border-radius: 10px; 
+        }
     </style>
 </head>
 <body class="p-8 text-left">
@@ -63,7 +92,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             
             <div v-for="ativo in ativos" :key="ativo.id" 
-                 class="asset-card p-6"
+                 class="asset-card p-6 relative overflow-hidden"
                  v-show="ativo.total_quantity > 0 || mostrarEncerrados"
                  :class="ativo.total_quantity <= 0 ? 'opacity-60 grayscale hover:grayscale-0 border-dashed border-slate-300' : 'border-t-4'"
                  :style="{ borderTopColor: ativo.total_quantity > 0 ? ativo.color : '#cbd5e1' }">
@@ -74,8 +103,8 @@
                         <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-sm" :style="{ backgroundColor: ativo.color }">
                             {{ ativo.name.substring(0, 2).toUpperCase() }}
                         </div>
-                        <div class="flex gap-2">
-                            <!-- NOVO BOTÃO: EDIÇÃO DE METADADOS IRPF -->
+                        <div class="flex gap-2 relative z-10">
+                            <!-- [RECUPERADO] BOTÃO DE EDIÇÃO PARA IRPF -->
                             <button @click="abrirModalEdicao(ativo)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all" title="Editar Metadados (IRPF)">
                                 <span class="icon-wrapper" v-html="getIcon('settings', 18)"></span>
                             </button>
@@ -92,8 +121,9 @@
                     </div>
 
                     <h2 class="text-xl font-bold text-slate-800 tracking-tight">{{ ativo.name }}</h2>
-                    <p class="text-[10px] font-bold text-slate-400 mt-1 truncate" :title="ativo.razao_social || 'Empresa/Fundo'">{{ ativo.razao_social || 'Metadados não preenchidos' }}</p>
+                    <p class="text-[10px] font-bold text-slate-400 mt-1 truncate" :title="ativo.razao_social || 'Empresa/Fundo'">{{ ativo.razao_social || 'Metadados IRPF ausentes' }}</p>
                     
+                    <!-- SISTEMA DE TAGS -->
                     <div class="flex flex-wrap gap-1.5 mt-2 mb-4">
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200" title="Tipo do Ativo">
                             <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: ativo.color }"></span>
@@ -110,11 +140,17 @@
                             <span class="icon-wrapper text-indigo-400" v-html="getIcon('target', 10)"></span>
                             {{ ativo.goal_name }}
                         </span>
+
+                        <!-- [NOVO] TAG DE CADEADO (GARANTIA DE DERIVATIVO) -->
+                        <span v-if="ativo.locked_quantity > 0 || ativo.locked_value > 0" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 shadow-sm" title="Ativo atrelado à Mesa Tática">
+                            <span class="icon-wrapper text-rose-500" v-html="getIcon('lock', 10)"></span>
+                            Garantia (Travada)
+                        </span>
                     </div>
 
                     <div class="bg-slate-50 rounded-xl p-4 mt-2 border border-slate-100">
                         <div class="flex justify-between mb-2">
-                            <span class="text-xs font-medium text-slate-500">Saldo Atualizado</span>
+                            <span class="text-xs font-medium text-slate-500">Saldo Projetado</span>
                             <span class="text-sm font-bold text-slate-800">{{ formatarMoeda(ativo.current_balance) }}</span>
                         </div>
                         <div class="flex justify-between mb-2">
@@ -130,11 +166,40 @@
                             <span class="text-xs font-medium text-slate-500">Proventos Acumulados</span>
                             <span class="text-xs font-bold text-emerald-600">{{ formatarMoeda(ativo.proventos_acumulados) }}</span>
                         </div>
+
+                        <!-- [NOVO] DETALHAMENTO DO CADEADO FINANCEIRO (PUT) -->
+                        <div v-if="ativo.locked_value > 0" class="mt-3 pt-3 border-t-2 border-rose-100 border-dashed">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-bold text-rose-600 uppercase flex items-center gap-1">
+                                    <span class="icon-wrapper" v-html="getIcon('lock', 12)"></span> Margem Retida (Put)
+                                </span>
+                                <span class="text-[10px] font-black text-rose-700">- {{ formatarMoeda(ativo.locked_value) }}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] font-bold text-slate-400">SALDO LIVRE (RESGATE)</span>
+                                <span class="text-xs font-black text-slate-800">{{ formatarMoeda(ativo.current_balance - ativo.locked_value) }}</span>
+                            </div>
+                        </div>
+
+                        <!-- [NOVO] DETALHAMENTO DO CADEADO FÍSICO (CALL) -->
+                        <div v-if="ativo.locked_quantity > 0" class="mt-3 pt-3 border-t-2 border-blue-100 border-dashed">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-bold text-blue-600 uppercase flex items-center gap-1">
+                                    <span class="icon-wrapper" v-html="getIcon('lock', 12)"></span> Cotas Travadas (Call)
+                                </span>
+                                <span class="text-[10px] font-black text-blue-700">- {{ ativo.locked_quantity }} cotas</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] font-bold text-slate-400">COTAS LIVRES (VENDA)</span>
+                                <span class="text-xs font-black text-slate-800">{{ ativo.total_quantity - ativo.locked_quantity }}</span>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
                 <!-- PARTE INFERIOR DO CARD (BOTÕES) -->
-                <div>
+                <div class="relative z-10">
                     <div class="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                         <button @click="prepararAporte(ativo)" class="py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs rounded-xl transition-colors flex justify-center items-center gap-1">
                             <span class="icon-wrapper" v-html="getIcon('arrow-down', 14)"></span> Compra
@@ -157,13 +222,13 @@
             </div>
         </div>
 
-        <!-- MODAL FORMULÁRIO DE ATIVO (Criação e Edição - Com Campos IRPF) -->
+        <!-- MODAL FORMULÁRIO DE ATIVO (CRIAR E EDITAR) -->
         <div v-if="modalFormAtivo.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-visible flex flex-col">
                 <div class="p-5 border-b border-slate-100 flex justify-between items-center text-white rounded-t-3xl" :class="modalFormAtivo.modoEdicao ? 'bg-indigo-600' : 'bg-blue-600'">
                     <h2 class="text-lg font-bold flex items-center gap-2">
                         <span class="icon-wrapper" v-html="getIcon(modalFormAtivo.modoEdicao ? 'settings' : 'plus-circle')"></span>
-                        {{ modalFormAtivo.modoEdicao ? 'Editar Metadados' : 'Novo Ativo' }}
+                        {{ modalFormAtivo.modoEdicao ? 'Editar Metadados (IRPF)' : 'Novo Ativo' }}
                     </h2>
                     <button @click="fecharModalFormAtivo" class="text-white/70 hover:text-white transition-colors">
                         <span class="icon-wrapper" v-html="getIcon('x')"></span>
@@ -173,7 +238,7 @@
                     
                     <div class="relative">
                         <label class="block text-xs font-bold text-slate-700 mb-1">Nome/Ticker do Ativo</label>
-                        <input v-model="formAtivo.name" @input="buscarSugestoes" @focus="buscarSugestoes" @blur="fecharSugestoesComAtraso" type="text" placeholder="Ex: ITUB3, MXRF11, Tesouro Selic..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase">
+                        <input v-model="formAtivo.name" @input="buscarSugestoes" @focus="buscarSugestoes" @blur="fecharSugestoesComAtraso" :disabled="modalFormAtivo.modoEdicao" type="text" placeholder="Ex: ITUB3, MXRF11, Tesouro Selic..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase" :class="modalFormAtivo.modoEdicao ? 'bg-slate-50 cursor-not-allowed opacity-70' : 'bg-white'">
                         
                         <div v-if="sugestoes.length > 0 && !modalFormAtivo.modoEdicao" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                             <div v-for="s in sugestoes" :key="s.ticker" @click="selecionarTicker(s)" class="px-4 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b border-slate-50 last:border-0">
@@ -186,7 +251,7 @@
                         </div>
                     </div>
 
-                    <!-- Novos Campos de Metadados IRPF -->
+                    <!-- [RECUPERADO] BLOCO DE IRPF (CNPJ, Razão Social) -->
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dados para IRPF (Opcional)</p>
                         <div>
@@ -206,7 +271,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-700 mb-1">Tipo de Classe</label>
-                            <select v-model="formAtivo.type" :disabled="modalFormAtivo.modoEdicao" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" :class="modalFormAtivo.modoEdicao ? 'bg-slate-100 cursor-not-allowed opacity-70' : 'bg-white'">
+                            <select v-model="formAtivo.type" :disabled="modalFormAtivo.modoEdicao" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none" :class="modalFormAtivo.modoEdicao ? 'bg-slate-50 cursor-not-allowed opacity-70' : 'bg-white'">
                                 <option value="Ações">Ações</option>
                                 <option value="FIIs">FIIs (Fundos Imob.)</option>
                                 <option value="Fiagro">Fiagro</option>
@@ -232,7 +297,6 @@
                             <option value="">Sem Categoria Associada</option>
                             <option v-for="sub in subcategories" :key="sub.id" :value="sub.id">{{ sub.name }}</option>
                         </select>
-                        <p class="text-[10px] text-slate-400 mt-1">Para cálculos de rebalanceamento global.</p>
                     </div>
 
                     <div>
@@ -247,7 +311,7 @@
                         <div class="w-5 h-5 rounded border flex items-center justify-center transition-colors" :class="formAtivo.is_rebalancing_active ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'">
                             <span v-if="formAtivo.is_rebalancing_active" class="icon-wrapper text-white" v-html="getIcon('check', 14)"></span>
                         </div>
-                        <label class="text-sm text-slate-700 font-medium cursor-pointer select-none">Incluir este ativo no Motor de Rebalanceamento Automático</label>
+                        <label class="text-sm text-slate-700 font-medium cursor-pointer select-none">Incluir no Rebalanceamento Automático</label>
                     </div>
 
                 </div>
@@ -260,7 +324,7 @@
             </div>
         </div>
 
-        <!-- MODAIS DE OPERAÇÃO (COMPRA/VENDA) -->
+        <!-- MODAIS DE OPERAÇÃO (COMPRA/VENDA COM TRAVA DE SEGURANÇA) -->
         <div v-if="modalOp.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
             <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div class="p-6 border-b border-slate-100" :class="modalOp.tipo === 'compra' ? 'bg-blue-50' : 'bg-rose-50'">
@@ -268,9 +332,20 @@
                         <span class="icon-wrapper" v-html="getIcon(modalOp.tipo === 'compra' ? 'arrow-down' : 'arrow-up')"></span>
                         {{ modalOp.tipo === 'compra' ? 'Aporte' : 'Venda' }} de Ativo
                     </h2>
-                    <p class="text-sm mt-1" :class="modalOp.tipo === 'compra' ? 'text-blue-600' : 'text-rose-600'">{{ formOp.asset_name }}</p>
+                    <p class="text-sm mt-1 font-bold" :class="modalOp.tipo === 'compra' ? 'text-blue-600' : 'text-rose-600'">{{ formOp.asset_name }}</p>
                 </div>
                 <div class="p-6 space-y-4">
+
+                    <!-- [NOVO] ALERTA VISUAL DE TRAVA DE DERIVATIVOS -->
+                    <div v-if="modalOp.tipo === 'venda' && (formOp.locked_quantity > 0 || formOp.locked_value > 0)" class="bg-amber-50 p-3 rounded-xl border border-amber-200 flex items-start gap-2 shadow-sm">
+                        <span class="icon-wrapper text-amber-600 mt-0.5" v-html="getIcon('lock', 16)"></span>
+                        <div>
+                            <p class="text-xs font-bold text-amber-800">Este ativo está sendo usado como garantia.</p>
+                            <p v-if="formOp.locked_quantity > 0" class="text-[10px] text-amber-700 mt-1">Sua venda está limitada a <strong>{{ formOp.max_quantity_allowed }} cotas</strong> (o restante está preso em Calls na Mesa Tática).</p>
+                            <p v-if="formOp.locked_value > 0" class="text-[10px] text-amber-700 mt-1">Seu resgate máximo financeiro está limitado a <strong>{{ formatarMoeda(formOp.max_financial_allowed) }}</strong> (o restante está garantindo Puts).</p>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="block text-xs font-bold text-slate-500 mb-1">Data da Operação</label>
                         <input type="date" v-model="formOp.date" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:outline-none" :class="modalOp.tipo === 'compra' ? 'focus:ring-blue-500' : 'focus:ring-rose-500'">
@@ -528,14 +603,18 @@
                 const goals = ref([]);
                 const totalAplicado = ref(0);
 
-                // Variáveis do Modal Híbrido (Criar/Editar)
+                // [RECUPERADO] LÓGICA DO MODAL DE EDIÇÃO E CADASTRO
                 const modalFormAtivo = ref({ aberto: false, modoEdicao: false });
-                const formAtivo = ref({ id: null, name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true, cnpj: '', razao_social: '', corretora: '' });
+                const formAtivo = ref({ 
+                    id: null, name: '', type: 'Ações', color: '#3b82f6', 
+                    subcategory_id: '', goal_id: '', is_rebalancing_active: true, 
+                    cnpj: '', razao_social: '', corretora: '' 
+                });
                 const sugestoes = ref([]);
                 let blurTimeout = null;
 
                 const modalOp = ref({ aberto: false, tipo: 'compra' });
-                const formOp = ref({ asset_id: null, asset_name: '', quantity: '', price: '', date: new Date().toISOString().split('T')[0] });
+                const formOp = ref({ asset_id: null, asset_name: '', quantity: '', price: '', date: new Date().toISOString().split('T')[0], locked_quantity: 0, locked_value: 0, max_quantity_allowed: 0, max_financial_allowed: 0, is_renda_fixa: false });
 
                 const modalRendimento = ref({ aberto: false });
                 const formRendimento = ref({ asset_id: null, asset_name: '', amount: '', date: new Date().toISOString().split('T')[0] });
@@ -558,7 +637,6 @@
                 const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
                 const formatarData = (d) => d ? d.split('-').reverse().join('/') : '';
 
-                // CARREGAMENTO DOS DADOS + CÁLCULO DOS PROVENTOS
                 const carregarDadosEGraficos = async () => {
                     try {
                         const [resAtivos, resSub, resGoals] = await Promise.all([
@@ -591,7 +669,6 @@
                     } catch (e) { console.error("Erro ao carregar:", e); }
                 };
 
-                // CÁLCULO PARA O CABEÇALHO DO EXTRATO
                 const resumoExtratoAtivo = computed(() => {
                     let proventos = 0;
                     let lucroRealizado = 0;
@@ -610,13 +687,14 @@
                     return { proventos, lucroRealizado, capitalInvestido };
                 });
 
-                // LÓGICA DO MODAL HÍBRIDO (CRIAR E EDITAR)
+                // [RECUPERADO] ABRIR MODAL MODO NOVO ATIVO
                 const abrirModalNovoAtivo = () => { 
                     formAtivo.value = { id: null, name: '', type: 'Ações', color: '#3b82f6', subcategory_id: '', goal_id: '', is_rebalancing_active: true, cnpj: '', razao_social: '', corretora: '' };
                     modalFormAtivo.value = { aberto: true, modoEdicao: false }; 
                     sugestoes.value = [];
                 };
 
+                // [RECUPERADO] ABRIR MODAL MODO EDIÇÃO (IRPF)
                 const abrirModalEdicao = (ativo) => {
                     formAtivo.value = { 
                         id: ativo.id, name: ativo.name, type: ativo.type, color: ativo.color, 
@@ -631,7 +709,7 @@
                 const fecharModalFormAtivo = () => { modalFormAtivo.value.aberto = false; };
 
                 const buscarSugestoes = () => {
-                    if (modalFormAtivo.value.modoEdicao) return; // Não sugere durante a edição
+                    if (modalFormAtivo.value.modoEdicao) return;
                     const q = formAtivo.value.name.toUpperCase();
                     if(q.length < 1) { sugestoes.value = []; return; }
                     
@@ -661,12 +739,13 @@
                     return cores[tipo] || 'bg-slate-100 text-slate-700';
                 };
 
+                // [RECUPERADO] SALVAR ATIVO (INTELIGENTE: CRIA OU EDITA VIA POST/PUT)
                 const salvarAtivo = async () => {
                     if (!formAtivo.value.name) return alert('O Ticker/Nome é obrigatório.');
                     try {
                         const url = modalFormAtivo.value.modoEdicao ? `http://localhost:3001/api/ativos/${formAtivo.value.id}` : 'http://localhost:3001/api/ativos';
                         const method = modalFormAtivo.value.modoEdicao ? 'PUT' : 'POST';
-
+                        
                         await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formAtivo.value) });
                         fecharModalFormAtivo();
                         carregarDadosEGraficos();
@@ -687,11 +766,39 @@
                 };
 
                 const prepararVenda = (ativo) => {
-                    formOp.value = { asset_id: ativo.id, asset_name: ativo.name, quantity: '', price: '', date: new Date().toISOString().split('T')[0] };
+                    const lockQtd = ativo.locked_quantity || 0;
+                    const lockVal = ativo.locked_value || 0;
+                    const maxQtd = Math.max(0, ativo.total_quantity - lockQtd);
+                    const maxFin = Math.max(0, ativo.current_balance - lockVal);
+
+                    formOp.value = { 
+                        asset_id: ativo.id, 
+                        asset_name: ativo.name, 
+                        quantity: '', 
+                        price: '', 
+                        date: new Date().toISOString().split('T')[0],
+                        locked_quantity: lockQtd,
+                        locked_value: lockVal,
+                        max_quantity_allowed: maxQtd,
+                        max_financial_allowed: maxFin,
+                        is_renda_fixa: ['Renda Fixa', 'Fundos', 'Caixa', 'Outros'].includes(ativo.type)
+                    };
                     modalOp.value = { aberto: true, tipo: 'venda' };
                 };
 
                 const confirmarOperacao = async () => {
+                    if (modalOp.value.tipo === 'venda') {
+                        const qtdInput = parseFloat(formOp.value.quantity || 0);
+                        const valorInput = qtdInput * parseFloat(formOp.value.price || 0);
+
+                        if (!formOp.value.is_renda_fixa && qtdInput > (formOp.value.max_quantity_allowed + 0.00000001)) {
+                            return alert(`Operação Bloqueada! Você tem ações retidas como margem.\nVenda máxima permitida: ${formOp.value.max_quantity_allowed} cotas.`);
+                        }
+                        if (formOp.value.is_renda_fixa && valorInput > (formOp.value.max_financial_allowed + 0.01)) {
+                            return alert(`Operação Bloqueada! Seu dinheiro está retido em uma Put.\nResgate máximo permitido: ${formatarMoeda(formOp.value.max_financial_allowed)}.`);
+                        }
+                    }
+
                     const endpoint = modalOp.value.tipo === 'compra' ? '/aporte' : '/venda';
                     try {
                         const res = await fetch(`http://localhost:3001/api/ativos${endpoint}`, {

@@ -3,14 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
 
-/**
- * Lógica de Isolamento de Dados:
- * Ao usar app.getPath('userData'), o Electron retorna uma pasta baseada no "productName" do package.json.
- */
 const userDataPath = app.getPath('userData');
 const dbPath = path.join(userDataPath, 'bd_myequity_v2.db');
 
-// Garante que a pasta userData existe
 if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
 }
@@ -105,58 +100,46 @@ db.exec(`
         key TEXT PRIMARY KEY,
         value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS OptionsContracts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL, 
+        asset_base TEXT NOT NULL, 
+        ticker TEXT NOT NULL, 
+        quantity INTEGER NOT NULL,
+        strike_price REAL NOT NULL,
+        premium_unit REAL NOT NULL,
+        total_premium REAL NOT NULL,
+        expiration_date TEXT NOT NULL,
+        style TEXT DEFAULT 'americano', 
+        status TEXT DEFAULT 'active', 
+        open_date TEXT NOT NULL,
+        buyback_total REAL DEFAULT 0,
+        realized_profit REAL DEFAULT 0
+    );
 `);
 
 // ==========================================
 // 2. SISTEMA DE MIGRAÇÃO CONTÍNUA (ALTER TABLES)
 // ==========================================
-// Esta função verifica se uma coluna existe antes de tentar criá-la.
 function columnExists(tableName, columnName) {
     const tableInfo = db.pragma(`table_info(${tableName})`);
     return tableInfo.some(col => col.name === columnName);
 }
 
-// Migração: Rebalanceamento e Objetivos
-if (!columnExists('Assets', 'is_rebalancing_active')) {
-    db.exec(`ALTER TABLE Assets ADD COLUMN is_rebalancing_active INTEGER DEFAULT 1;`);
-}
-if (!columnExists('Assets', 'goal_id')) {
-    db.exec(`ALTER TABLE Assets ADD COLUMN goal_id INTEGER;`);
-}
+if (!columnExists('Assets', 'is_rebalancing_active')) db.exec(`ALTER TABLE Assets ADD COLUMN is_rebalancing_active INTEGER DEFAULT 1;`);
+if (!columnExists('Assets', 'goal_id')) db.exec(`ALTER TABLE Assets ADD COLUMN goal_id INTEGER;`);
+if (!columnExists('Assets', 'cnpj')) db.exec(`ALTER TABLE Assets ADD COLUMN cnpj TEXT;`);
+if (!columnExists('Assets', 'razao_social')) db.exec(`ALTER TABLE Assets ADD COLUMN razao_social TEXT;`);
+if (!columnExists('Assets', 'corretora')) db.exec(`ALTER TABLE Assets ADD COLUMN corretora TEXT;`);
+if (!columnExists('EquityHistory', 'tax_due')) db.exec(`ALTER TABLE EquityHistory ADD COLUMN tax_due REAL DEFAULT 0;`);
+if (!columnExists('EquityHistory', 'lucro')) db.exec(`ALTER TABLE EquityHistory ADD COLUMN lucro REAL DEFAULT 0;`);
+if (!columnExists('Goals', 'icon')) db.exec(`ALTER TABLE Goals ADD COLUMN icon TEXT DEFAULT 'target';`);
+if (!columnExists('Goals', 'color')) db.exec(`ALTER TABLE Goals ADD COLUMN color TEXT DEFAULT '#10b981';`);
+if (!columnExists('Loans', 'is_payroll_deductible')) db.exec(`ALTER TABLE Loans ADD COLUMN is_payroll_deductible INTEGER DEFAULT 0;`);
 
-// ==========================================
-// Migração: Módulo de IRPF (A causa do Erro 500)
-// ==========================================
-if (!columnExists('Assets', 'cnpj')) {
-    console.log("Migração: Adicionando coluna 'cnpj' na tabela Assets...");
-    db.exec(`ALTER TABLE Assets ADD COLUMN cnpj TEXT;`);
-}
-if (!columnExists('Assets', 'razao_social')) {
-    console.log("Migração: Adicionando coluna 'razao_social' na tabela Assets...");
-    db.exec(`ALTER TABLE Assets ADD COLUMN razao_social TEXT;`);
-}
-if (!columnExists('Assets', 'corretora')) {
-    console.log("Migração: Adicionando coluna 'corretora' na tabela Assets...");
-    db.exec(`ALTER TABLE Assets ADD COLUMN corretora TEXT;`);
-}
-
-// Migração: Módulo de Impostos (Histórico)
-if (!columnExists('EquityHistory', 'tax_due')) {
-    db.exec(`ALTER TABLE EquityHistory ADD COLUMN tax_due REAL DEFAULT 0;`);
-}
-if (!columnExists('EquityHistory', 'lucro')) {
-    db.exec(`ALTER TABLE EquityHistory ADD COLUMN lucro REAL DEFAULT 0;`);
-}
-
-// Migração: Módulo de Passivos e Metas Visuais
-if (!columnExists('Goals', 'icon')) {
-    db.exec(`ALTER TABLE Goals ADD COLUMN icon TEXT DEFAULT 'target';`);
-}
-if (!columnExists('Goals', 'color')) {
-    db.exec(`ALTER TABLE Goals ADD COLUMN color TEXT DEFAULT '#10b981';`);
-}
-if (!columnExists('Loans', 'is_payroll_deductible')) {
-    db.exec(`ALTER TABLE Loans ADD COLUMN is_payroll_deductible INTEGER DEFAULT 0;`);
-}
+// [NOVO] Colunas para o encerramento antecipado (Recompra) de Opções
+if (!columnExists('OptionsContracts', 'buyback_total')) db.exec(`ALTER TABLE OptionsContracts ADD COLUMN buyback_total REAL DEFAULT 0;`);
+if (!columnExists('OptionsContracts', 'realized_profit')) db.exec(`ALTER TABLE OptionsContracts ADD COLUMN realized_profit REAL DEFAULT 0;`);
 
 module.exports = db;
