@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyEquity - Mercado Global</title>
+    
+    <script src="libs/tailwindcss.js"></script>
+    <script src="libs/vue.global.js"></script>
+    <script src="libs/lucide.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        span.icon-wrapper { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+        .global-card { transition: all 0.3s ease; border: 1px solid #e2e8f0; background: white; border-radius: 24px; border-top: 4px solid #0f766e; min-height: 420px; display: flex; flex-direction: column; justify-content: space-between;}
+        .global-card:hover { border-color: #0f766e; transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(15, 118, 110, 0.1); }
+        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.6); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-8 text-left">
+
+    <div id="app" class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- CABEÇALHO DA ABA INTERNACIONAL -->
+        <div class="flex justify-between items-end mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
+                    <span class="w-10 h-10 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center">
+                        <span class="icon-wrapper" v-html="getIcon('globe', 24)"></span>
+                    </span>
+                    Mercado Global
+                </h1>
+                <p class="text-slate-500 mt-1">Sua carteira de proteção em Dólar (USD) via Corretora Internacional.</p>
+            </div>
+            <div class="flex flex-col items-end gap-3">
+                <div class="flex gap-2">
+                    <button @click="mostrarEncerrados = !mostrarEncerrados" class="py-2.5 px-4 bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-sm rounded-xl transition-colors flex items-center gap-2 border border-slate-200 shadow-sm">
+                        <span class="icon-wrapper" v-html="getIcon(mostrarEncerrados ? 'eye-off' : 'eye')"></span>
+                        {{ mostrarEncerrados ? 'Ocultar Zerados' : 'Mostrar Zerados' }}
+                    </button>
+                    <button @click="abrirModalAtivo" class="py-2.5 px-5 bg-teal-700 text-white hover:bg-teal-800 font-bold text-sm rounded-xl transition-colors flex items-center gap-2 shadow-lg shadow-teal-700/30">
+                        <span class="icon-wrapper" v-html="getIcon('plus')"></span> Adicionar Ativo (Ticker)
+                    </button>
+                </div>
+                <div class="flex gap-6 mt-1 text-right">
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase">Patrimônio Global</p>
+                        <p class="text-xl font-black text-slate-800">{{ formatarUSD(totalAplicadoUSD) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="ativosGlobais.length === 0" class="py-12 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+            <span class="icon-wrapper text-slate-300 mb-4" v-html="getIcon('plane', 48)"></span>
+            <h3 class="text-lg font-bold text-slate-700">O passaporte está em branco.</h3>
+            <p class="text-slate-500 text-sm mt-1">Comece investindo em REITs e Stocks para dolarizar sua carteira.</p>
+        </div>
+
+        <!-- GRID DE ATIVOS GLOBAIS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            <div v-for="ativo in ativosGlobais" :key="ativo.id" 
+                 class="global-card p-6" 
+                 v-show="ativo.total_quantity > 0 || mostrarEncerrados"
+                 :class="ativo.total_quantity <= 0 ? 'opacity-60 grayscale hover:grayscale-0 border-dashed border-slate-300' : ''">
+                
+                <!-- SUPERIOR: IDENTIFICAÇÃO E AÇÕES -->
+                <div>
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h2 class="text-2xl font-black text-slate-800 tracking-tight">{{ ativo.ticker }}</h2>
+                            <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase truncate max-w-[150px]">{{ ativo.name }}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="abrirEdicao(ativo)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-teal-300 hover:text-teal-600 shadow-sm transition-all" title="Editar Metadados">
+                                <span class="icon-wrapper" v-html="getIcon('settings', 16)"></span>
+                            </button>
+                            <button @click="prepararAtualizacaoManual(ativo)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-emerald-300 hover:text-emerald-600 shadow-sm transition-all" title="Atualizar Preço Manualmente (USD)">
+                                <span class="icon-wrapper" v-html="getIcon('edit-2', 16)"></span>
+                            </button>
+                            <button @click="excluirAtivo(ativo)" class="p-2 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-rose-300 hover:text-rose-600 shadow-sm transition-all" title="Excluir Ativo">
+                                <span class="icon-wrapper" v-html="getIcon('trash-2', 16)"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 mb-3">
+                        {{ ativo.type }}
+                    </span>
+
+                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500">Saldo Atualizado</span>
+                            <span class="text-sm font-black text-teal-700">{{ formatarUSD(ativo.current_balance_usd) }}</span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500">Quantidade</span>
+                            <span class="text-xs font-bold text-slate-700">{{ ativo.total_quantity.toFixed(4) }}</span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500">Preço Médio</span>
+                            <span class="text-xs font-bold text-slate-800">{{ formatarUSD(ativo.avg_price_usd) }}</span>
+                        </div>
+                        <div class="flex justify-between pt-2 mt-2 border-t border-slate-200 border-dashed">
+                            <span class="text-xs font-medium text-slate-500">Câmbio Médio Base</span>
+                            <span class="text-xs font-bold text-amber-600">{{ formatarBRL(ativo.avg_exchange_rate) }}</span>
+                        </div>
+                        <div class="flex justify-between pt-2 mt-2 border-t border-slate-200 border-dashed">
+                            <span class="text-xs font-medium text-slate-500">Proventos Totais</span>
+                            <span class="text-xs font-bold text-emerald-600">{{ formatarUSD(ativo.proventos_acumulados) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INFERIOR: OPERAÇÕES FINANCEIRAS -->
+                <div class="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-slate-100">
+                    <button @click="prepararOperacao(ativo, 'buy')" class="py-2.5 bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-colors flex flex-col items-center gap-1" title="Nova Remessa / Compra">
+                        <span class="icon-wrapper" v-html="getIcon('arrow-down-right', 16)"></span> Buy
+                    </button>
+                    <button @click="prepararOperacao(ativo, 'sell')" class="py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-colors flex flex-col items-center gap-1" title="Vender Ativo">
+                        <span class="icon-wrapper" v-html="getIcon('arrow-up-right', 16)"></span> Sell
+                    </button>
+                    <button @click="prepararRendimento(ativo)" class="py-2.5 bg-white border border-slate-200 text-emerald-600 hover:bg-emerald-50 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-colors flex flex-col items-center gap-1" title="Registrar Dividendos">
+                        <span class="icon-wrapper" v-html="getIcon('banknote', 16)"></span> Divs
+                    </button>
+                    <button @click="abrirExtrato(ativo)" class="py-2.5 bg-slate-50 text-slate-600 hover:bg-slate-100 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-colors flex flex-col items-center gap-1 border border-slate-200" title="Extrato Histórico">
+                        <span class="icon-wrapper" v-html="getIcon('history', 16)"></span> Hist
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- MODAL NOVO/EDITAR ATIVO -->
+        <div v-if="modalFormAtivo.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col">
+                <div class="p-6 border-b border-slate-100 text-white rounded-t-3xl" :class="modalFormAtivo.modoEdicao ? 'bg-slate-700' : 'bg-teal-700'">
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon(modalFormAtivo.modoEdicao ? 'settings' : 'globe')"></span>
+                        {{ modalFormAtivo.modoEdicao ? 'Editar Ativo Global' : 'Novo Ativo Global' }}
+                    </h2>
+                </div>
+                
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Ticker (Símbolo)</label>
+                        <input v-model="formAtivo.ticker" type="text" placeholder="Ex: VNQ, AAPL, SPY..." class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-teal-500 uppercase font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Nome / Descrição</label>
+                        <input v-model="formAtivo.name" type="text" placeholder="Ex: Vanguard Real Estate ETF" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Tipo de Ativo</label>
+                        <select v-model="formAtivo.type" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-teal-500 bg-white">
+                            <option value="REIT">REIT (Fundos Imob.)</option>
+                            <option value="Stock">Stock (Ações)</option>
+                            <option value="ETF Global">ETF Global</option>
+                            <option value="Bonds/Renda Fixa">Bonds / Renda Fixa</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="p-5 border-t border-slate-100 bg-slate-50 rounded-b-3xl flex justify-end gap-2">
+                    <button @click="modalFormAtivo.aberto = false" class="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <button @click="salvarAtivo" class="px-6 py-2.5 text-sm font-bold text-white rounded-xl shadow-md transition-colors" :class="modalFormAtivo.modoEdicao ? 'bg-slate-700 hover:bg-slate-800' : 'bg-teal-700 hover:bg-teal-800'">
+                        {{ modalFormAtivo.modoEdicao ? 'Salvar Edição' : 'Adicionar Ticker' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAIS DE OPERAÇÃO (BUY / SELL) -->
+        <div v-if="modalOp.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col">
+                <div class="p-6 border-b border-slate-100" :class="modalOp.tipo === 'buy' ? 'bg-teal-700 text-white' : 'bg-rose-50'">
+                    <h2 class="text-xl font-bold flex items-center gap-2" :class="modalOp.tipo === 'sell' ? 'text-rose-700' : ''">
+                        <span class="icon-wrapper" v-html="getIcon(modalOp.tipo === 'buy' ? 'plane' : 'arrow-up-right')"></span>
+                        {{ modalOp.tipo === 'buy' ? 'Ordem de Compra' : 'Ordem de Venda' }}
+                    </h2>
+                    <p class="text-sm mt-1" :class="modalOp.tipo === 'buy' ? 'text-teal-200' : 'text-rose-600'">Ativo: {{ formOp.asset_ticker }}</p>
+                </div>
+                
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Data da Operação</label>
+                        <input type="date" v-model="formOp.date" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:outline-none" :class="modalOp.tipo === 'buy' ? 'focus:ring-teal-500' : 'focus:ring-rose-500'">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Quantidade</label>
+                            <input type="number" step="0.0001" v-model="formOp.quantity" placeholder="Ex: 5.5" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:outline-none" :class="modalOp.tipo === 'buy' ? 'focus:ring-teal-500' : 'focus:ring-rose-500'">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Preço Unit. (U$)</label>
+                            <input type="number" step="0.01" v-model="formOp.price_usd" placeholder="Ex: 85.30" class="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:outline-none" :class="modalOp.tipo === 'buy' ? 'focus:ring-teal-500' : 'focus:ring-rose-500'">
+                        </div>
+                    </div>
+
+                    <div v-if="modalOp.tipo === 'buy'" class="bg-amber-50 p-4 rounded-xl border border-amber-200 mt-2">
+                        <label class="block text-xs font-bold text-amber-800 mb-1 flex items-center gap-1">
+                            <span class="icon-wrapper" v-html="getIcon('arrow-left-right', 12)"></span> Câmbio da Remessa / Wise (R$)
+                        </label>
+                        <input type="number" step="0.01" v-model="formOp.exchange_rate" placeholder="Ex: 5.45" class="w-full border border-amber-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 bg-white">
+                        <p class="text-[10px] text-amber-700 mt-2">Para cálculo de isenção de variação cambial no IRPF futuro.</p>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center flex flex-col">
+                        <span class="text-xs text-slate-500 mb-1">Total Movimentado</span>
+                        <span class="text-xl font-black text-slate-800">{{ formatarUSD(formOp.quantity * formOp.price_usd) }}</span>
+                    </div>
+                </div>
+
+                <div class="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50 rounded-b-3xl">
+                    <button @click="modalOp.aberto = false" class="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button @click="confirmarOperacao" class="px-6 py-2.5 text-sm font-bold text-white rounded-xl shadow-md transition-colors" :class="modalOp.tipo === 'buy' ? 'bg-teal-700 hover:bg-teal-800' : 'bg-rose-600 hover:bg-rose-700'">
+                        {{ modalOp.tipo === 'buy' ? 'Registrar Buy' : 'Confirmar Venda' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL RENDIMENTO (DIVIDENDOS EXTERIOR) -->
+        <div v-if="modalRendimento.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col">
+                <div class="p-6 border-b border-emerald-100 bg-emerald-50">
+                    <h2 class="text-xl font-bold flex items-center gap-2 text-emerald-700">
+                        <span class="icon-wrapper" v-html="getIcon('banknote')"></span>Dividendos (USD)
+                    </h2>
+                    <p class="text-sm mt-1 text-emerald-600">{{ formRendimento.asset_ticker }}</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Data do Pagamento</label>
+                        <input type="date" v-model="formRendimento.date" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-emerald-700 mb-1">Valor Bruto (U$)</label>
+                            <input type="number" step="0.01" v-model="formRendimento.amount_usd" class="w-full border border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-lg font-black text-emerald-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-rose-700 mb-1" title="Tax Withheld">IR Retido (U$)</label>
+                            <input type="number" step="0.01" v-model="formRendimento.taxes_usd" class="w-full border border-rose-200 bg-rose-50 rounded-xl px-4 py-3 text-lg font-bold text-rose-700 focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Normalmente, corretoras nos EUA retêm 30% do dividendo direto na fonte.</p>
+                </div>
+                <div class="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50 rounded-b-3xl">
+                    <button @click="modalRendimento.aberto = false" class="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button @click="confirmarRendimento" class="px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-colors">Salvar Recebimento</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL ATUALIZAÇÃO MANUAL (SEM API) -->
+        <div v-if="modalAtualizacao.aberto" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col">
+                <div class="p-6 border-b border-slate-100 bg-slate-800 text-white">
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <span class="icon-wrapper" v-html="getIcon('edit-2')"></span>Marcação a Mercado
+                    </h2>
+                    <p class="text-sm mt-1 text-slate-300">{{ formAtualizacao.asset_ticker }}</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Qtd. Atual</label>
+                            <input type="number" disabled :value="formAtualizacao.quantity" class="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-500 font-bold cursor-not-allowed">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Cotação (U$)</label>
+                            <input type="number" step="0.01" v-model="formAtualizacao.price_usd" class="w-full border border-teal-300 rounded-xl px-4 py-3 text-sm font-bold text-teal-700 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center mt-2">
+                        <span class="text-xs text-slate-500 block mb-1">Novo Saldo Projetado</span>
+                        <span class="text-xl font-black text-slate-800">{{ formatarUSD(formAtualizacao.quantity * formAtualizacao.price_usd) }}</span>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50 rounded-b-3xl">
+                    <button @click="modalAtualizacao.aberto = false" class="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <button @click="confirmarAtualizacao" class="px-6 py-2.5 text-sm font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl shadow-md">Atualizar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL DE EXTRATO BILINGUE -->
+        <div v-if="modalExtrato.aberto" @click.self="modalExtrato.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
+            <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <div>
+                        <h2 class="text-xl font-bold flex items-center gap-2 text-slate-800">
+                            <span class="icon-wrapper text-slate-500" v-html="getIcon('history')"></span>
+                            Extrato Consolidado
+                        </h2>
+                        <p class="text-sm mt-1 text-slate-500">{{ modalExtrato.asset_ticker }}</p>
+                    </div>
+                    <button @click="modalExtrato.aberto = false" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+                        <span class="icon-wrapper" v-html="getIcon('x')"></span>
+                    </button>
+                </div>
+
+                <div class="overflow-y-auto custom-scrollbar flex-grow p-6 bg-slate-50">
+                    <div v-if="historicoAtivo.length === 0" class="text-center py-12 text-slate-400">
+                        <span class="icon-wrapper mb-2 opacity-50" v-html="getIcon('inbox', 48)"></span>
+                        <p>Nenhuma movimentação para este ativo.</p>
+                    </div>
+
+                    <div v-else class="space-y-4">
+                        <div v-for="h in historicoAtivo" :key="h.id" class="bg-white border border-slate-200 rounded-2xl p-4 flex justify-between items-center shadow-sm">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-inner shrink-0" :class="h.type === 'buy' ? 'bg-teal-500' : h.type === 'sell' ? 'bg-rose-500' : 'bg-emerald-500'">
+                                    <span class="icon-wrapper" v-html="getIcon(h.type === 'buy' ? 'arrow-down-right' : h.type === 'sell' ? 'arrow-up-right' : 'banknote', 20)"></span>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800 uppercase">{{ h.type === 'buy' ? 'Remessa / Buy' : h.type === 'sell' ? 'Venda / Sell' : 'Dividendos' }}</p>
+                                    <p class="text-xs text-slate-500 font-medium">{{ formatarData(h.date) }}</p>
+                                    <p v-if="h.quantity > 0" class="text-[10px] text-slate-400 mt-0.5">Qtd: {{ h.quantity }} cotas</p>
+                                </div>
+                            </div>
+
+                            <div class="text-right">
+                                <!-- Valor Principal em Dólar -->
+                                <p class="text-base font-black" :class="h.type === 'buy' ? 'text-slate-800' : 'text-emerald-600'">
+                                    {{ h.type === 'buy' ? '-' : '+' }} {{ formatarUSD(h.amount_usd) }}
+                                </p>
+                                
+                                <!-- Detalhamento IRPF e Câmbio -->
+                                <div class="flex gap-1 mt-1 justify-end">
+                                    <span v-if="h.type === 'buy' || h.type === 'sell'" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Câmbio (IR): {{ formatarBRL(h.exchange_rate) }}
+                                    </span>
+                                    <span v-if="h.type === 'dividend' && h.taxes_usd > 0" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                                        Retido: {{ formatarUSD(h.taxes_usd) }}
+                                    </span>
+                                    <span v-if="h.type === 'sell' && h.taxes_usd > 0" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                        Lucro (USD): {{ formatarUSD(h.taxes_usd) }}
+                                    </span>
+                                </div>
+
+                                <div class="mt-2 flex justify-end">
+                                    <button @click="excluirHistorico(h)" class="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200" title="Desfazer">
+                                        <span class="icon-wrapper" v-html="getIcon('trash', 14)"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const mostrarEncerrados = ref(false);
+                const ativosGlobais = ref([]);
+                
+                // Modais
+                const modalFormAtivo = ref({ aberto: false, modoEdicao: false });
+                const formAtivo = ref({ id: null, ticker: '', name: '', type: 'REIT' });
+
+                const modalOp = ref({ aberto: false, tipo: 'buy' });
+                const formOp = ref({ asset_id: null, asset_ticker: '', quantity: '', price_usd: '', exchange_rate: '', date: new Date().toISOString().split('T')[0] });
+
+                const modalRendimento = ref({ aberto: false });
+                const formRendimento = ref({ asset_id: null, asset_ticker: '', amount_usd: '', taxes_usd: '', date: new Date().toISOString().split('T')[0] });
+
+                const modalAtualizacao = ref({ aberto: false });
+                const formAtualizacao = ref({ asset_id: null, asset_ticker: '', quantity: 0, price_usd: '' });
+
+                const modalExtrato = ref({ aberto: false, asset_id: null, asset_ticker: '' });
+                const historicoAtivo = ref([]);
+
+                // Helpers Formatação
+                const formatarUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
+                const formatarBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+                const formatarData = (d) => d ? d.split('-').reverse().join('/') : '';
+                
+                const getIcon = (name, size=18) => { 
+                    try { 
+                        const n = name.split('-').map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(''); 
+                        return lucide.icons[n].toSvg({width:size,height:size}); 
+                    } catch(e) { return ""; } 
+                };
+
+                const totalAplicadoUSD = computed(() => ativosGlobais.value.reduce((acc, curr) => acc + curr.current_balance_usd, 0));
+
+                // API Calls
+                const carregarDados = async () => {
+                    try {
+                        const res = await fetch('http://localhost:3001/api/global');
+                        ativosGlobais.value = await res.json();
+                    } catch (e) { console.error("Erro ao carregar ativos globais:", e); }
+                };
+
+                const abrirModalAtivo = () => { 
+                    formAtivo.value = { id: null, ticker: '', name: '', type: 'REIT' };
+                    modalFormAtivo.value = { aberto: true, modoEdicao: false }; 
+                };
+
+                const abrirEdicao = (ativo) => {
+                    formAtivo.value = { id: ativo.id, ticker: ativo.ticker, name: ativo.name, type: ativo.type };
+                    modalFormAtivo.value = { aberto: true, modoEdicao: true };
+                };
+
+                const salvarAtivo = async () => {
+                    if (!formAtivo.value.ticker) return alert('Ticker é obrigatório.');
+                    try {
+                        const url = modalFormAtivo.value.modoEdicao ? `http://localhost:3001/api/global/${formAtivo.value.id}` : 'http://localhost:3001/api/global';
+                        const method = modalFormAtivo.value.modoEdicao ? 'PUT' : 'POST';
+                        
+                        await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formAtivo.value) });
+                        modalFormAtivo.value.aberto = false;
+                        carregarDados();
+                    } catch (e) { console.error(e); }
+                };
+
+                const excluirAtivo = async (ativo) => {
+                    if (!confirm(`TEM CERTEZA? O ativo ${ativo.ticker} será excluído para sempre.`)) return;
+                    try {
+                        await fetch(`http://localhost:3001/api/global/${ativo.id}`, { method: 'DELETE' });
+                        carregarDados();
+                    } catch (e) { console.error(e); }
+                };
+
+                const prepararOperacao = (ativo, tipo) => {
+                    formOp.value = { 
+                        asset_id: ativo.id, asset_ticker: ativo.ticker, 
+                        quantity: '', price_usd: '', exchange_rate: tipo === 'buy' ? '' : ativo.avg_exchange_rate, 
+                        date: new Date().toISOString().split('T')[0] 
+                    };
+                    modalOp.value = { aberto: true, tipo };
+                };
+
+                const confirmarOperacao = async () => {
+                    const endpoint = modalOp.value.tipo === 'buy' ? '/buy' : '/sell';
+                    try {
+                        const res = await fetch(`http://localhost:3001/api/global${endpoint}`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formOp.value)
+                        });
+                        const result = await res.json();
+                        if (result.error) return alert(result.error);
+                        
+                        if (modalOp.value.tipo === 'sell' && result.lucro_usd) {
+                            alert(`Venda registrada!\nLucro/Prejuízo: ${formatarUSD(result.lucro_usd)}\n(A conversão tributária para BRL ficará no módulo de Relatórios)`);
+                        }
+                        
+                        modalOp.value.aberto = false;
+                        carregarDados();
+                    } catch (e) { console.error(e); }
+                };
+
+                const prepararRendimento = (ativo) => {
+                    formRendimento.value = { asset_id: ativo.id, asset_ticker: ativo.ticker, amount_usd: '', taxes_usd: '', date: new Date().toISOString().split('T')[0] };
+                    modalRendimento.value = { aberto: true };
+                };
+
+                const confirmarRendimento = async () => {
+                    try {
+                        await fetch(`http://localhost:3001/api/global/dividend`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formRendimento.value)
+                        });
+                        modalRendimento.value.aberto = false;
+                        carregarDados();
+                    } catch (e) { console.error(e); }
+                };
+
+                const prepararAtualizacaoManual = (ativo) => {
+                    const preco = ativo.total_quantity > 0 ? (ativo.current_balance_usd / ativo.total_quantity).toFixed(2) : '';
+                    formAtualizacao.value = { asset_id: ativo.id, asset_ticker: ativo.ticker, quantity: ativo.total_quantity, price_usd: preco };
+                    modalAtualizacao.value = { aberto: true };
+                };
+
+                const confirmarAtualizacao = async () => {
+                    const novoSaldo = formAtualizacao.value.quantity * parseFloat(formAtualizacao.value.price_usd);
+                    try {
+                        await fetch(`http://localhost:3001/api/global/sync-manual/${formAtualizacao.value.asset_id}`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ novo_saldo_usd: novoSaldo })
+                        });
+                        modalAtualizacao.value.aberto = false;
+                        carregarDados();
+                    } catch (e) { console.error(e); }
+                };
+
+                const abrirExtrato = async (ativo) => {
+                    try {
+                        const res = await fetch(`http://localhost:3001/api/global/history/${ativo.id}`);
+                        historicoAtivo.value = await res.json();
+                        modalExtrato.value = { aberto: true, asset_id: ativo.id, asset_ticker: ativo.ticker };
+                    } catch (e) { console.error(e); }
+                };
+
+                const excluirHistorico = async (h) => {
+                    if(!confirm(`Deseja mesmo desfazer esta operação? Os cálculos de Preço Médio e Câmbio serão refeitos automaticamente.`)) return;
+                    try {
+                        await fetch(`http://localhost:3001/api/global/history/${h.id}`, { method: 'DELETE' });
+                        abrirExtrato({ id: h.asset_id, ticker: modalExtrato.value.asset_ticker }); 
+                        carregarDados(); 
+                    } catch(e) { console.error(e); }
+                };
+
+                onMounted(() => { 
+                    carregarDados(); 
+                    setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 150); 
+                });
+
+                return { 
+                    mostrarEncerrados,
+                    ativosGlobais, totalAplicadoUSD,
+                    modalFormAtivo, formAtivo, abrirModalAtivo, abrirEdicao, salvarAtivo, excluirAtivo,
+                    modalOp, formOp, prepararOperacao, confirmarOperacao,
+                    modalRendimento, formRendimento, prepararRendimento, confirmarRendimento,
+                    modalAtualizacao, formAtualizacao, prepararAtualizacaoManual, confirmarAtualizacao,
+                    modalExtrato, historicoAtivo, abrirExtrato, excluirHistorico,
+                    formatarUSD, formatarBRL, formatarData, getIcon
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

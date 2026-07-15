@@ -117,6 +117,33 @@ db.exec(`
         buyback_total REAL DEFAULT 0,
         realized_profit REAL DEFAULT 0
     );
+
+    -- ========================================================
+    -- NOVO MÓDULO: MERCADO GLOBAL (EXTERIOR EM USD)
+    -- ========================================================
+    CREATE TABLE IF NOT EXISTS GlobalAssets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL, -- REIT, Stock, ETF
+        total_quantity REAL DEFAULT 0,
+        avg_price_usd REAL DEFAULT 0,
+        avg_exchange_rate REAL DEFAULT 0, -- Câmbio médio pago via Wise
+        current_balance_usd REAL DEFAULT 0,
+        status TEXT DEFAULT 'active'
+    );
+
+    CREATE TABLE IF NOT EXISTS GlobalHistory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asset_id INTEGER NOT NULL,
+        type TEXT NOT NULL, -- 'buy', 'sell', 'dividend'
+        amount_usd REAL NOT NULL,
+        quantity REAL,
+        exchange_rate REAL, -- Câmbio do dia da operação na Wise
+        taxes_usd REAL DEFAULT 0, -- Imposto retido na fonte (ex: 30% EUA nos dividendos)
+        date TEXT NOT NULL,
+        FOREIGN KEY (asset_id) REFERENCES GlobalAssets(id) ON DELETE CASCADE
+    );
 `);
 
 // ==========================================

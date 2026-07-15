@@ -128,15 +128,28 @@ router.delete('/goals/:id', (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+/// ============================================================================
+// 5. BACKUP E RESTORE DO BANCO DE DADOS (BLINDADO CONTRA CORRUPÇÃO WAL)
 // ============================================================================
-// 5. BACKUP E RESTORE DO BANCO DE DADOS
-// ============================================================================
-router.get('/system/backup', (req, res) => {
-    const dbPath = db.name; // Pega dinamicamente o caminho real que o SQLite está usando
-    if (fs.existsSync(dbPath)) {
-        res.download(dbPath, `myequity_backup_${new Date().toISOString().split('T')[0]}.db`);
-    } else {
-        res.status(404).json({ error: "Banco de dados não encontrado no servidor." });
+router.get('/system/backup', async (req, res) => {
+    const path = require('path');
+    const timestamp = new Date().toISOString().split('T')[0];
+    const backupFileName = `myequity_backup_${timestamp}.db`;
+    const tempBackupPath = path.join(os.tmpdir(), backupFileName);
+    
+    try {
+        // A API nativa do better-sqlite3 faz o checkpoint do WAL automaticamente
+        // garantindo que 100% dos dados sejam salvos no arquivo de backup com segurança.
+        await db.backup(tempBackupPath);
+        
+        res.download(tempBackupPath, backupFileName, (err) => {
+            if (!err) {
+                // Apaga o arquivo temporário após o download
+                try { fs.unlinkSync(tempBackupPath); } catch (e) {}
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Erro ao gerar backup seguro: " + err.message });
     }
 });
 
@@ -144,21 +157,30 @@ router.post('/system/restore', upload.single('database'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
     
     const tempPath = req.file.path;
-    const dbPath = db.name; // Caminho real
+    const dbPath = db.name; // Caminho real do arquivo .db
+    const walPath = dbPath + '-wal';
+    const shmPath = dbPath + '-shm';
 
     try {
-        // Obrigatório fechar a conexão no Windows antes de substituir o arquivo físico
+        // Obrigatório fechar a conexão no Windows antes de manipular os arquivos
         db.close(); 
-        fs.copyFileSync(tempPath, dbPath);
-        fs.unlinkSync(tempPath); // Limpa o arquivo temporário
         
-        // Reinicia o aplicativo automaticamente para carregar o novo banco de dados
+        // DELEÇÃO DE SEGURANÇA: Apaga os arquivos WAL antigos se existirem, 
+        // senão o SQLite vai tentar aplicá-los no DB novo e corromper os dados.
+        if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+        if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+        // Substitui o banco de dados principal
+        fs.copyFileSync(tempPath, dbPath);
+        fs.unlinkSync(tempPath); // Limpa o arquivo temporário do multer
+        
+        // Reinicia o aplicativo automaticamente para carregar o novo banco
         setTimeout(() => {
             app.relaunch();
             app.exit(0);
         }, 1000);
 
-        res.json({ success: true, message: "Backup restaurado com sucesso. Reiniciando..." });
+        res.json({ success: true, message: "Backup restaurado com segurança. Reiniciando..." });
     } catch (err) {
         res.status(500).json({ error: "Falha catastrófica ao restaurar: " + err.message });
     }

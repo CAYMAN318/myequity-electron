@@ -1,7 +1,7 @@
 {
-  "name": "myequity-v2",
+  "name": "myequity-v3",
   "version": "3.0.0",
-  "description": "Gestão Patrimonial Estratégica V2 - Wealth Management",
+  "description": "Gestão Patrimonial Estratégica V3 - Wealth Management",
   "main": "main.js",
   "scripts": {
     "start": "electron . --no-sandbox",
@@ -26,8 +26,8 @@
     "electron-rebuild": "^3.2.9"
   },
   "build": {
-    "appId": "com.myequity.v2",
-    "productName": "MyEquity V2",
+    "appId": "com.myequity.v3",
+    "productName": "MyEquity V3",
     "directories": {
       "output": "dist"
     },
@@ -46,7 +46,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "MyEquity V2"
+      "shortcutName": "MyEquity V3"
     }
   }
 }

@@ -28,7 +28,7 @@
         <div class="flex justify-between items-end mb-8">
             <div>
                 <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Análise de Portfólio</h1>
-                <p class="text-slate-500 mt-1">Evolução de patrimônio, rentabilidade e amortizações.</p>
+                <p class="text-slate-500 mt-1">Evolução de patrimônio global, rentabilidade e amortizações.</p>
             </div>
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2">
@@ -46,12 +46,15 @@
             </div>
         </div>
 
-        <!-- ANDAR SUPERIOR: GRÁFICO DE ATIVOS -->
+        <!-- ANDAR SUPERIOR: GRÁFICO DE ATIVOS (STACKED B3 + GLOBAL) -->
         <div class="card-analitico p-6 border-t-4 border-blue-500 relative flex flex-col">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
                 <div>
                     <h3 class="text-xl font-bold text-slate-800">Evolução de Ativos e Receitas</h3>
-                    <p class="text-sm text-slate-500">Aportes e Volatilidade no tempo.</p>
+                    <p class="text-sm text-slate-500 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> B3 (Brasil)
+                        <span class="w-3 h-3 rounded-full bg-teal-500 inline-block ml-2"></span> Offshore (Global)
+                    </p>
                 </div>
                 
                 <div class="flex flex-wrap items-center gap-3">
@@ -68,9 +71,9 @@
                     </div>
 
                     <select v-model="filtroAtivoEvolucao" @change="renderEvolucaoInvestimentos" class="text-xs font-bold border border-slate-200 rounded-lg px-3 py-2 bg-slate-50 text-slate-700 outline-none focus:border-blue-500 max-w-[180px] truncate">
-                        <option value="global">🌍 Global</option>
+                        <option value="global">🌍 Portfólio Global (Tudo)</option>
                         <option v-for="ativo in listaAtivosParaFiltro" :key="ativo.id" :value="ativo.id">
-                            {{ ativo.name }}
+                            {{ ativo.name }} {{ ativo.market === 'Global' ? '(Ext)' : '' }}
                         </option>
                     </select>
                 </div>
@@ -117,7 +120,7 @@
 
         <!-- MODAL GIGANTE: ASSISTENTE DE IRPF -->
         <div v-if="modalIrpf.aberto" @click.self="modalIrpf.aberto = false" class="fixed inset-0 z-50 flex items-center justify-center modal-blur p-4">
-            <div class="bg-white rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col h-[90vh]">
+            <div class="bg-white rounded-3xl w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col h-[90vh]">
                 
                 <!-- Cabeçalho do IRPF -->
                 <div class="p-6 border-b border-slate-200 bg-slate-800 text-white flex justify-between items-center shrink-0">
@@ -126,7 +129,7 @@
                             <span class="icon-wrapper" v-html="getIcon('landmark')"></span>
                             Auditor e Assistente de IRPF
                         </h2>
-                        <p class="text-sm mt-1 text-slate-300">Central de dados para declaração na Receita Federal do Brasil.</p>
+                        <p class="text-sm mt-1 text-slate-300">Auditoria Nacional e Exterior (Offshore).</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2 bg-slate-700 px-4 py-2 rounded-xl">
@@ -144,13 +147,13 @@
                 <!-- Menu de Abas -->
                 <div class="flex border-b border-slate-200 bg-slate-50 shrink-0">
                     <button @click="modalIrpf.abaAtiva = 'bens'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalIrpf.abaAtiva === 'bens' ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
-                        <span class="icon-wrapper" v-html="getIcon('briefcase', 18)"></span> Posição 31/12 (Bens, Direitos e Ônus)
+                        <span class="icon-wrapper" v-html="getIcon('briefcase', 18)"></span> Posição 31/12 (Bens e Direitos)
                     </button>
                     <button @click="modalIrpf.abaAtiva = 'proventos'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalIrpf.abaAtiva === 'proventos' ? 'border-emerald-600 text-emerald-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
                         <span class="icon-wrapper" v-html="getIcon('dollar-sign', 18)"></span> Proventos (Audit)
                     </button>
                     <button @click="modalIrpf.abaAtiva = 'vendas'" class="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors border-b-2" :class="modalIrpf.abaAtiva === 'vendas' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-500 hover:bg-slate-100'">
-                        <span class="icon-wrapper" v-html="getIcon('arrow-up-right', 18)"></span> Vendas (Ganhos de Capital)
+                        <span class="icon-wrapper" v-html="getIcon('arrow-up-right', 18)"></span> Ganhos de Capital
                     </button>
                 </div>
 
@@ -162,10 +165,10 @@
                         <p class="font-bold text-slate-600">Calculando Posições Históricas...</p>
                     </div>
 
-                    <!-- ABA 1: BENS E DIREITOS (Agora com Dívidas Reais/Opções) -->
+                    <!-- ABA 1: BENS E DIREITOS -->
                     <div v-if="modalIrpf.abaAtiva === 'bens' && !modalIrpf.loading">
                         <div class="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-6 text-sm text-blue-800">
-                            <p><strong>Bens e Direitos / Dívidas Reais:</strong> Posição exata no dia <strong>31/12/{{ modalIrpf.anoSelecionado }}</strong>. Opções lançadas (não encerradas até 31/12) devem ser declaradas em "Dívidas e Ônus Reais" com o Código 47.</p>
+                            <p><strong>Posição 31/12:</strong> Ativos nacionais (Custo), Ativos no Exterior (Custo BRL c/ Câmbio da Remessa) e Opções Lançadas (Dívida/Ônus).</p>
                         </div>
                         
                         <div v-if="modalIrpf.dados.bens.length === 0" class="text-center py-10 text-slate-400">
@@ -173,15 +176,17 @@
                         </div>
 
                         <div class="space-y-4">
-                            <div v-for="bem in modalIrpf.dados.bens" :key="bem.id" class="bg-white border rounded-2xl p-5 shadow-sm" :class="bem.natureza === 'opcao' ? 'border-rose-300' : 'border-slate-200'">
+                            <div v-for="bem in modalIrpf.dados.bens" :key="bem.id" class="bg-white border rounded-2xl p-5 shadow-sm" :class="bem.natureza === 'opcao' ? 'border-rose-300' : (bem.natureza === 'exterior' ? 'border-teal-300' : 'border-slate-200')">
                                 <div class="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
                                     <div>
                                         <div class="flex items-center gap-2 mb-1">
                                             <span v-if="bem.natureza === 'opcao'" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-black rounded uppercase">Dívida / Ônus</span>
+                                            <span v-else-if="bem.natureza === 'exterior'" class="px-2 py-0.5 bg-teal-100 text-teal-700 text-[10px] font-black rounded uppercase">Exterior (Lei 14.754)</span>
                                             <span v-else class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded uppercase">Bens e Direitos</span>
+                                            
                                             <h4 class="text-lg font-black text-slate-800">{{ bem.name }}</h4>
                                         </div>
-                                        <p class="text-xs font-bold text-slate-500">{{ bem.type }} • Custo a Declarar: <span class="font-black" :class="bem.natureza === 'opcao' ? 'text-rose-600' : 'text-blue-600'">{{ formatarMoeda(bem.totalInvestido) }}</span></p>
+                                        <p class="text-xs font-bold text-slate-500">{{ bem.type }} • Valor Declarado: <span class="font-black" :class="bem.natureza === 'opcao' ? 'text-rose-600' : (bem.natureza === 'exterior' ? 'text-teal-600' : 'text-blue-600')">{{ formatarMoeda(bem.totalInvestidoBRL) }}</span></p>
                                     </div>
                                     <div class="text-right">
                                         <p class="text-[10px] font-bold text-slate-400 uppercase">Posição</p>
@@ -206,48 +211,52 @@
                             <span class="icon-wrapper mt-0.5 shrink-0" v-html="getIcon('alert-triangle')"></span>
                             <div>
                                 <p class="font-bold mb-1">Atenção: Ferramenta de Dupla Checagem (Auditoria)</p>
-                                <p>A Receita Federal cruza os dados com o <strong>Informe de Rendimentos</strong> enviado pela corretora. Em caso de divergência, o PDF da corretora prevalece.</p>
+                                <p>Os dividendos nacionais cruzam com o Informe da Corretora. Dividendos do Exterior sofrem tributação e devem ser compensados o imposto pago na fonte.</p>
                             </div>
                         </div>
 
-                        <div v-if="modalIrpf.dados.proventos.length === 0" class="text-center py-10 text-slate-400">
-                            Nenhum provento registrado em {{ modalIrpf.anoSelecionado }}.
-                        </div>
-
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div v-for="prov in modalIrpf.dados.proventos" :key="prov.name" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex justify-between items-center">
+                            <div v-for="prov in modalIrpf.dados.proventos" :key="prov.name" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex justify-between items-center" :class="prov.origem === 'Exterior' ? 'border-teal-200' : ''">
                                 <div>
-                                    <h4 class="text-base font-bold text-slate-800">{{ prov.name }}</h4>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h4 class="text-base font-bold text-slate-800">{{ prov.name }}</h4>
+                                        <span v-if="prov.origem === 'Exterior'" class="px-1.5 py-0.5 bg-teal-100 text-teal-700 text-[8px] font-black rounded uppercase">Exterior</span>
+                                    </div>
                                     <p class="text-[10px] text-slate-500 truncate w-48">{{ prov.razao_social || 'Razão Social pendente' }}</p>
-                                    <p class="text-[10px] font-mono text-slate-400 mt-1">CNPJ: {{ prov.cnpj || 'Não informado' }}</p>
+                                    <p v-if="prov.cnpj" class="text-[10px] font-mono text-slate-400 mt-1">CNPJ: {{ prov.cnpj }}</p>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Recebido no Ano</p>
-                                    <p class="text-lg font-black text-emerald-600">{{ formatarMoeda(prov.total_recebido) }}</p>
+                                    <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Recebido</p>
+                                    <p v-if="prov.origem !== 'Exterior'" class="text-lg font-black text-emerald-600">{{ formatarMoeda(prov.total_recebido) }}</p>
+                                    <div v-else>
+                                        <p class="text-base font-black text-teal-600">{{ formatarUSD(prov.total_recebido_usd) }}</p>
+                                        <p class="text-[10px] text-rose-500 font-bold" title="Imposto Retido">IRF: {{ formatarUSD(prov.total_imposto_retido_usd) }}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- ABA 3: VENDAS (GANHOS DE CAPITAL E CESTAS) -->
+                    <!-- ABA 3: VENDAS E GANHOS DE CAPITAL -->
                     <div v-if="modalIrpf.abaAtiva === 'vendas' && !modalIrpf.loading">
                         <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl mb-6 text-sm text-amber-800">
-                            <p><strong>Cálculo Tributário (Renda Variável):</strong> Vendas de ações comuns possuem isenção para volumes abaixo de <strong>R$ 20.000 mensais</strong>. Lucros com Fundos, BDRs e <strong>Opções de Derivativos</strong> não possuem isenção, sendo sempre tributáveis.</p>
+                            <p><strong>Apuração do Imposto:</strong> A isenção de R$ 20.000 se aplica apenas a Ações Nacionais. O exterior (Offshore) agora é apurado anualmente na DIRPF a 15% fixo sobre o lucro final em Reais.</p>
                         </div>
 
                         <div class="space-y-4">
-                            <div v-for="mes in modalIrpf.dados.vendas" :key="mes.mesNumero" v-show="mes.acoes_total_vendido > 0 || mes.tributavel_total_lucro !== 0" class="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                            <div v-for="mes in modalIrpf.dados.vendas" :key="mes.mesNumero" v-show="mes.acoes_total_vendido > 0 || mes.tributavel_total_lucro !== 0 || mes.exterior_lucro_usd !== 0" class="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
                                 
                                 <div class="bg-slate-800 text-white p-3 px-4 flex justify-between items-center">
                                     <h4 class="text-sm font-black uppercase tracking-widest">{{ mes.mesNome }}</h4>
                                 </div>
 
-                                <div class="p-0 flex flex-col md:flex-row">
-                                    <!-- Cesta 1: Ações (Com Validação de Isenção) -->
-                                    <div class="flex-1 p-4 border-b md:border-b-0 md:border-r border-slate-200">
+                                <div class="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                                    
+                                    <!-- Ações Nacionais (20k) -->
+                                    <div class="flex-1 p-4">
                                         <p class="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center justify-between">
-                                            Cesta de Ações (Isenção 20k)
-                                            <span v-if="mes.acoes_total_vendido > 0 && mes.acoes_total_vendido < 20000" class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] rounded">Isento (Sub 20k)</span>
+                                            Ações BR (Isenção 20k)
+                                            <span v-if="mes.acoes_total_vendido > 0 && mes.acoes_total_vendido < 20000" class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] rounded">Isento</span>
                                             <span v-if="mes.acoes_total_vendido >= 20000" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] rounded">Tributável</span>
                                         </p>
                                         <div class="grid grid-cols-2 gap-2 text-sm">
@@ -256,7 +265,7 @@
                                                 <p class="font-bold text-slate-800">{{ formatarMoeda(mes.acoes_total_vendido) }}</p>
                                             </div>
                                             <div class="bg-slate-50 p-2 rounded border border-slate-100">
-                                                <p class="text-[10px] text-slate-400">Resultado Líquido</p>
+                                                <p class="text-[10px] text-slate-400">Resultado</p>
                                                 <p class="font-bold" :class="mes.acoes_total_lucro > 0 ? 'text-emerald-600' : (mes.acoes_total_lucro < 0 ? 'text-rose-600' : 'text-slate-800')">
                                                     {{ mes.acoes_total_lucro > 0 ? '+' : '' }}{{ formatarMoeda(mes.acoes_total_lucro) }}
                                                 </p>
@@ -264,10 +273,10 @@
                                         </div>
                                     </div>
 
-                                    <!-- Cesta 2: Direto Tributável (FIIs, BDRs e Derivativos) -->
+                                    <!-- FIIs / Opções -->
                                     <div class="flex-1 p-4">
                                         <p class="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center justify-between">
-                                            FIIs, BDRs e Opções (Sem Isenção)
+                                            FIIs / BDRs / Opções
                                             <span v-if="mes.tributavel_total_lucro > 0" class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] rounded">Tributável</span>
                                         </p>
                                         <div class="grid grid-cols-2 gap-2 text-sm">
@@ -278,8 +287,27 @@
                                                 </p>
                                             </div>
                                             <div class="bg-orange-50 p-2 rounded border border-orange-100">
-                                                <p class="text-[10px] text-orange-600 font-bold">Imposto Devido (Mês)</p>
+                                                <p class="text-[10px] text-orange-600 font-bold">DARF Mês</p>
                                                 <p class="font-black text-orange-700">{{ formatarMoeda((mes.acoes_total_vendido >= 20000 ? mes.acoes_total_imposto : 0) + mes.tributavel_total_imposto) }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Exterior Offshore -->
+                                    <div class="flex-1 p-4">
+                                        <p class="text-xs font-bold text-teal-700 uppercase mb-3 flex items-center justify-between">
+                                            Exterior Offshore (15%)
+                                        </p>
+                                        <div class="grid grid-cols-2 gap-2 text-sm">
+                                            <div class="bg-teal-50 p-2 rounded border border-teal-100">
+                                                <p class="text-[10px] text-teal-600">Lucro (USD -> BRL)</p>
+                                                <p class="font-bold" :class="mes.exterior_lucro_brl > 0 ? 'text-teal-700' : (mes.exterior_lucro_brl < 0 ? 'text-rose-600' : 'text-slate-800')">
+                                                    {{ mes.exterior_lucro_brl > 0 ? '+' : '' }}{{ formatarMoeda(mes.exterior_lucro_brl) }}
+                                                </p>
+                                            </div>
+                                            <div class="bg-teal-700 p-2 rounded border border-teal-800 text-white shadow-inner">
+                                                <p class="text-[10px] text-teal-200 font-bold">Reserva IR (Anual)</p>
+                                                <p class="font-black">{{ formatarMoeda(mes.exterior_imposto_brl) }}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -323,14 +351,15 @@
                 });
 
                 const formatarMoeda = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+                const formatarUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
                 const getIcon = (n, s=24) => { try { return lucide.icons[n].toSvg({width:s, height:s}); } catch(e) { return ""; } };
 
                 const listaAtivosParaFiltro = computed(() => {
                     const map = new Map();
                     data.value.evolutionInvestments.forEach(item => {
-                        if(item.asset_id && item.asset_name) map.set(item.asset_id, item.asset_name);
+                        if(item.asset_id && item.asset_name) map.set(item.asset_id, { id: item.asset_id, name: item.asset_name, market: item.market });
                     });
-                    return Array.from(map, ([id, name]) => ({id, name})).sort((a,b) => a.name.localeCompare(b.name));
+                    return Array.from(map.values()).sort((a,b) => a.name.localeCompare(b.name));
                 });
 
                 const carregarDados = async () => {
@@ -370,15 +399,16 @@
 
                 const gerarTextoDeclaracao = (bem) => {
                     if (bem.natureza === 'opcao') {
-                        const premioStr = formatarMoeda(bem.totalInvestido);
-                        return `Opção de ${bem.type} ${bem.name}, titularidade de ${bem.quantidade} contratos. Prêmio recebido/travado de ${premioStr}.`;
+                        return `Opção de ${bem.type} ${bem.name}, titularidade de ${bem.quantidade} contratos. Prêmio recebido de ${formatarMoeda(bem.totalInvestidoBRL)}.`;
+                    } else if (bem.natureza === 'exterior') {
+                        const qty = bem.quantidade.toFixed(4).replace(/\.?0+$/, ''); 
+                        return `${qty} cotas do ativo no exterior ${bem.name} (${bem.razao_social}). Custo Médio Aquisitivo em Moeda Estrangeira: ${formatarUSD(bem.precoMedioUSD)}. Câmbio Médio de Remessa (R$): ${formatarMoeda(bem.cambioMedioBRL)}. Custo Total Histórico de ${formatarMoeda(bem.totalInvestidoBRL)}.`;
                     } else {
                         const qty = bem.quantidade.toFixed(4).replace(/\.?0+$/, ''); 
                         const razao = bem.razao_social || 'Razão Social pendente';
                         const cnpj = bem.cnpj || 'CNPJ pendente';
-                        const corretora = bem.corretora || 'Corretora/Custódia pendente';
-                        const pm = formatarMoeda(bem.precoMedio);
-                        return `${qty} cotas de ${bem.name} (${razao}), CNPJ: ${cnpj}, custodiadas na instituição ${corretora}. Preço Médio de Aquisição: ${pm}.`;
+                        const corretora = bem.corretora || 'Corretora pendente';
+                        return `${qty} cotas de ${bem.name} (${razao}), CNPJ: ${cnpj}, custodiadas em ${corretora}. Custo Médio Aquisitivo de ${formatarMoeda(bem.precoMedio)}. Total: ${formatarMoeda(bem.totalInvestidoBRL)}.`;
                     }
                 };
 
@@ -390,7 +420,7 @@
                     document.body.removeChild(textArea);
                 };
 
-                // LÓGICA DE GRÁFICOS (MANTIDA INTACTA)
+                // GRÁFICO STACKED (B3 + GLOBAL)
                 const renderEvolucaoInvestimentos = () => {
                     const ctxEv = document.getElementById('evolucaoInvestChart');
                     if (!ctxEv) return;
@@ -409,11 +439,20 @@
                         const key = `${year}-${month}`;
                         
                         if (!groupedData[key]) {
-                            groupedData[key] = { label: `${month}/${year.slice(-2)}`, aporteMes: 0, resgateMes: 0, proventoMes: 0, dataSort: new Date(`${year}-${month}-02`), patrimonioSnapshot: null };
+                            groupedData[key] = { label: `${month}/${year.slice(-2)}`, dataSort: new Date(`${year}-${month}-02`), patrimonioSnapshot: null,
+                                aporteBR: 0, aporteExt: 0, resgateBR: 0, resgateExt: 0, proventoBR: 0, proventoExt: 0
+                            };
                         }
-                        if (row.type === 'contribution') groupedData[key].aporteMes += row.amount;
-                        if (row.type === 'withdrawal') groupedData[key].resgateMes += row.amount;
-                        if (row.type === 'dividend') groupedData[key].proventoMes += row.amount;
+                        
+                        if (row.market === 'Global') {
+                            if (row.type === 'contribution') groupedData[key].aporteExt += row.amount;
+                            if (row.type === 'withdrawal') groupedData[key].resgateExt += row.amount;
+                            if (row.type === 'dividend') groupedData[key].proventoExt += row.amount;
+                        } else {
+                            if (row.type === 'contribution') groupedData[key].aporteBR += row.amount;
+                            if (row.type === 'withdrawal') groupedData[key].resgateBR += row.amount;
+                            if (row.type === 'dividend') groupedData[key].proventoBR += row.amount;
+                        }
                     });
 
                     data.value.snapshots.forEach(snap => {
@@ -421,7 +460,8 @@
                         const [year, month] = snap.date.split('-');
                         const key = `${year}-${month}`;
                         if (!groupedData[key]) {
-                            groupedData[key] = { label: `${month}/${year.slice(-2)}`, aporteMes: 0, resgateMes: 0, proventoMes: 0, dataSort: new Date(`${year}-${month}-02`), patrimonioSnapshot: null };
+                            groupedData[key] = { label: `${month}/${year.slice(-2)}`, dataSort: new Date(`${year}-${month}-02`), patrimonioSnapshot: null,
+                                aporteBR: 0, aporteExt: 0, resgateBR: 0, resgateExt: 0, proventoBR: 0, proventoExt: 0 };
                         }
                     });
 
@@ -435,38 +475,31 @@
                         snapshotsPorMes[key].push(snap);
                     });
 
-                    let acumuladoAportes = 0;
-                    let acumuladoReceitas = 0;
+                    let acumuladoAportesBR = 0; let acumuladoAportesExt = 0;
+                    let acumuladoReceitasBR = 0; let acumuladoReceitasExt = 0;
                     let ultimoPrecoConhecidoPorAtivo = {}; 
 
                     timeline.forEach(t => {
-                        acumuladoAportes += (t.aporteMes - t.resgateMes);
-                        acumuladoReceitas += t.proventoMes;
-                        t.aporteAcumulado = Math.max(0, acumuladoAportes);
-                        t.receitaAcumulada = acumuladoReceitas;
+                        acumuladoAportesBR += (t.aporteBR - t.resgateBR);
+                        acumuladoAportesExt += (t.aporteExt - t.resgateExt);
+                        acumuladoReceitasBR += t.proventoBR;
+                        acumuladoReceitasExt += t.proventoExt;
+                        
+                        t.aporteAcumuladoBruto = Math.max(0, acumuladoAportesBR + acumuladoAportesExt);
+                        t.receitaAcumuladaBruta = acumuladoReceitasBR + acumuladoReceitasExt;
 
                         const mesKey = `${t.dataSort.getFullYear()}-${String(t.dataSort.getMonth() + 1).padStart(2, '0')}`;
                         
                         if (snapshotsPorMes[mesKey]) {
                             snapshotsPorMes[mesKey].forEach(snap => {
-                                if(snap.asset_id !== undefined) {
-                                    ultimoPrecoConhecidoPorAtivo[snap.asset_id] = snap.total_value !== undefined ? snap.total_value : snap.patrimonio_total;
-                                } else {
-                                    ultimoPrecoConhecidoPorAtivo['global_legacy'] = snap.patrimonio_total;
-                                }
+                                ultimoPrecoConhecidoPorAtivo[snap.asset_id] = snap.total_value !== undefined ? snap.total_value : snap.patrimonio_total;
                             });
                         }
 
                         if (filtroAtivoEvolucao.value === 'global') {
-                            if (ultimoPrecoConhecidoPorAtivo['global_legacy'] !== undefined && Object.keys(ultimoPrecoConhecidoPorAtivo).length === 1) {
-                                t.patrimonioSnapshot = ultimoPrecoConhecidoPorAtivo['global_legacy'];
-                            } else {
-                                let sum = 0;
-                                Object.keys(ultimoPrecoConhecidoPorAtivo).forEach(key => {
-                                    if(key !== 'global_legacy') sum += ultimoPrecoConhecidoPorAtivo[key];
-                                });
-                                t.patrimonioSnapshot = sum;
-                            }
+                            let sum = 0;
+                            Object.values(ultimoPrecoConhecidoPorAtivo).forEach(val => sum += val);
+                            t.patrimonioSnapshot = sum;
                         } else {
                             t.patrimonioSnapshot = ultimoPrecoConhecidoPorAtivo[filtroAtivoEvolucao.value] || null;
                         }
@@ -482,26 +515,32 @@
                     }
 
                     const isAportes = tipoVisaoEvolucao.value === 'aportes';
+                    
                     const datasets = [
                         {
-                            type: 'line', label: isAportes ? 'Custo de Aquisição (Aportes)' : 'Proventos Acumulados',
-                            data: timeline.map(t => isAportes ? t.aporteAcumulado : t.receitaAcumulada),
+                            type: 'line', label: isAportes ? 'Custo Total de Aquisição' : 'Proventos Acumulados',
+                            data: timeline.map(t => isAportes ? t.aporteAcumuladoBruto : t.receitaAcumuladaBruta),
                             borderColor: isAportes ? '#3b82f6' : '#10b981', backgroundColor: isAportes ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
                             borderWidth: 2, borderDash: [5, 5], fill: true, tension: 0.3, yAxisID: 'y'
                         },
                         {
-                            type: 'bar', label: isAportes ? 'Fluxo no Mês (Aporte)' : 'Recebimento no Mês',
-                            data: timeline.map(t => isAportes ? t.aporteMes : t.proventoMes),
-                            backgroundColor: isAportes ? '#bfdbfe' : '#a7f3d0', borderRadius: 4, yAxisID: 'y1'
+                            type: 'bar', label: isAportes ? 'Aporte B3' : 'Rendimento B3',
+                            data: timeline.map(t => isAportes ? t.aporteBR : t.proventoBR),
+                            backgroundColor: isAportes ? '#3b82f6' : '#10b981', stack: 'Stack 0', yAxisID: 'y1', borderRadius: { topLeft: 4, topRight: 4 }
+                        },
+                        {
+                            type: 'bar', label: isAportes ? 'Aporte Offshore' : 'Rendimento Offshore',
+                            data: timeline.map(t => isAportes ? t.aporteExt : t.proventoExt),
+                            backgroundColor: isAportes ? '#14b8a6' : '#0f766e', stack: 'Stack 0', yAxisID: 'y1', borderRadius: { topLeft: 4, topRight: 4 }
                         }
                     ];
 
                     if (isAportes) {
-                        const labelMarcacao = filtroAtivoEvolucao.value === 'global' ? 'Patrimônio Total (Marcação)' : 'Valor Atual (Marcação)';
+                        const labelMarcacao = filtroAtivoEvolucao.value === 'global' ? 'Patrimônio Consolidado (BRL)' : 'Valor Atual (Marcação)';
                         datasets.unshift({
                             type: 'line', label: labelMarcacao,
                             data: timeline.map(t => t.patrimonioSnapshot),
-                            borderColor: '#0f766e', borderWidth: 3, fill: false, tension: 0.3, spanGaps: true, yAxisID: 'y'
+                            borderColor: '#0f172a', borderWidth: 3, fill: false, tension: 0.3, spanGaps: true, yAxisID: 'y'
                         });
                     }
 
@@ -509,7 +548,11 @@
                         type: 'bar', data: { labels: timeline.map(t => t.label), datasets: datasets },
                         options: {
                             responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-                            scales: { x: { grid: { display: false } }, y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + (val/1000) + 'k' } }, y1: { type: 'linear', display: false, position: 'right', grid: { display: false } } },
+                            scales: { 
+                                x: { stacked: true, grid: { display: false } }, 
+                                y: { type: 'linear', display: true, position: 'left', grid: { color: '#f1f5f9' }, ticks: { callback: (val) => 'R$ ' + (val/1000) + 'k' } }, 
+                                y1: { stacked: true, type: 'linear', display: false, position: 'right', grid: { display: false } } 
+                            },
                             plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: {size: 11} } }, tooltip: { callbacks: { label: function(c) { return ` ${c.dataset.label}: ${formatarMoeda(c.raw)}`; } } } }
                         }
                     });
@@ -589,7 +632,7 @@
                 });
 
                 return { 
-                    loading, data, formatarMoeda, getIcon, filtroAtivoEvolucao, tipoVisaoEvolucao,
+                    loading, data, formatarMoeda, formatarUSD, getIcon, filtroAtivoEvolucao, tipoVisaoEvolucao,
                     filtroTempo, filtroDivida, listaAtivosParaFiltro, renderEvolucaoInvestimentos, renderEvolucaoDividas,
                     modalIrpf, anosDisponiveis, abrirAssistenteIrpf, carregarDadosIrpf, gerarTextoDeclaracao, copiarTexto
                 };

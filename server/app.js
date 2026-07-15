@@ -20,6 +20,7 @@ const ativosRoutes = require('./routes/ativos');
 const parametrosRouter = require('./routes/parametros');
 const relatoriosRoutes = require('./routes/relatorios');
 const derivativosRoutes = require('./routes/derivativos'); // NOVA ROTA: Derivativos
+const globalRoutes = require('./routes/global'); // NOVA ROTA: Mercado Global (Exterior)
 
 // Roteamento da API para Ativos, Dívidas, Dashboard, Relatórios e Derivativos
 app.use('/api/dashboard-patrimonial', dashboardRoutes);
@@ -28,6 +29,7 @@ app.use('/api/ativos', ativosRoutes);
 app.use('/api/parametros', parametrosRouter);
 app.use('/api/relatorios', relatoriosRoutes);
 app.use('/api/derivativos', derivativosRoutes); // NOVA API Mapeada
+app.use('/api/global', globalRoutes); // API do Mercado Global
 
 // Fallback para abrir a index.html (SPA Pattern)
 app.get('/', (req, res) => {
