@@ -1,6 +1,6 @@
 {
   "name": "myequity-v3",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Gestão Patrimonial Estratégica V3 - Wealth Management",
   "main": "main.js",
   "scripts": {
